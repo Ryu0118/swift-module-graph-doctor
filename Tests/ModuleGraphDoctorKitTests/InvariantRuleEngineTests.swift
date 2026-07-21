@@ -1,4 +1,3 @@
-import Foundation
 @testable import ModuleGraphDoctorKit
 import Testing
 
@@ -8,19 +7,16 @@ struct InvariantRuleEngineTests {
         TargetID(packageName: "P", targetName: name)
     }
 
-    private func makeLabeler(sdk: Set<String> = []) throws -> TargetLabeler {
-        try TargetLabeler(
-            explicit: [:],
-            regexRules: [
-                .init(pattern: "(Client|UseCase)Live$", label: "live"),
-                .init(pattern: "Feature$", label: "feature"),
-                .init(pattern: "(Client|UseCase)$", label: "interface"),
-            ],
-            sdkProducts: sdk,
-        )
+    private func layers(for scope: Set<TargetID>, weights: TargetWeights? = nil) throws -> [TargetID: String] {
+        let labeler = try TargetLabeler(layers: [
+            "live": .regex("(Client|UseCase)Live$"),
+            "feature": .regex("Feature$"),
+            "interface": .regex("(Client|UseCase)$"),
+        ])
+        return try labeler.resolveLayers(for: scope, weights: weights)
     }
 
-    @Test("forbid-edgeはFeature→Liveの直接辺を検出する")
+    @Test("A -> B（直接辺の禁止）はFeature→Liveの辺を検出する")
     func forbidEdgeDetectsFeatureToLive() async throws {
         let feature = target("HomeFeature")
         let live = target("FooClientLive")
@@ -32,18 +28,17 @@ struct InvariantRuleEngineTests {
         )
 
         let violations = try await InvariantRuleEngine.evaluate(
-            rules: [.forbidEdge(name: "feature-no-live", from: "feature", to: "live")],
+            rules: [.forbidEdge(name: "feature -> live", from: "feature", to: "live")],
             graph: graph,
             scope: graph.nonTestNodes,
-            labeler: makeLabeler(),
+            labels: layers(for: graph.nonTestNodes),
         )
 
-        #expect(violations.map(\.key) == ["feature-no-live: P/HomeFeature -> P/FooClientLive"])
+        #expect(violations.map(\.key) == ["feature -> live: P/HomeFeature -> P/FooClientLive"])
     }
 
-    @Test("forbid-reachは中間ノード経由の推移的到達をwitness path付きで検出する")
+    @Test("A => B（推移到達の禁止）は中間ノード経由のリークをwitness path付きで検出する")
     func forbidReachDetectsTransitiveLeak() async throws {
-        // interface -> plain -> live: no direct edge, but reachable
         let interface = target("FooClient")
         let middle = target("Helper")
         let live = target("BarUseCaseLive")
@@ -55,17 +50,17 @@ struct InvariantRuleEngineTests {
         )
 
         let violations = try await InvariantRuleEngine.evaluate(
-            rules: [.forbidReach(name: "no-live-reach", from: "interface", to: "live")],
+            rules: [.forbidReach(name: "interface => live", from: "interface", to: "live")],
             graph: graph,
             scope: graph.nonTestNodes,
-            labeler: makeLabeler(),
+            labels: layers(for: graph.nonTestNodes),
         )
 
         #expect(violations.count == 1)
         #expect(violations[0].path == ["P/FooClient", "P/Helper", "P/BarUseCaseLive"])
     }
 
-    @Test("forbid-reachのto:sdkは外部product依存のリークを検出する")
+    @Test("完全一致layerは外部product依存のリークにもマッチする")
     func forbidReachDetectsExternalSDKLeak() async throws {
         let interface = target("FooClient")
         let middle = target("Helper")
@@ -77,18 +72,19 @@ struct InvariantRuleEngineTests {
         )
 
         let violations = try await InvariantRuleEngine.evaluate(
-            rules: [.forbidReach(name: "interface-no-sdk", from: "interface", to: "sdk")],
+            rules: [.forbidReach(name: "interface => sdk", from: "interface", to: "sdk")],
             graph: graph,
             scope: graph.nonTestNodes,
-            labeler: makeLabeler(sdk: ["SomeDatabaseSDK"]),
+            labels: layers(for: graph.nonTestNodes),
+            externalNames: ["sdk": ["SomeDatabaseSDK"]],
         )
 
-        #expect(violations.map(\.key) == ["interface-no-sdk: P/FooClient -> SomeDatabaseSDK"])
+        #expect(violations.map(\.key) == ["interface => sdk: P/FooClient -> SomeDatabaseSDK"])
         #expect(violations[0].path == ["P/FooClient", "P/Helper", "SomeDatabaseSDK"])
     }
 
-    @Test("forbid-dependentsはallowlist外の依存元だけを違反にする")
-    func forbidDependentsAllowsOnlyListedLabels() async throws {
+    @Test("* => B（依存元の制限）はallow外の依存元だけを違反にする")
+    func forbidDependentsAllowsOnlyListedLayers() async throws {
         let heavy = target("HeavyClientLive")
         let allowed = target("OtherUseCaseLive")
         let offender = target("HomeFeature")
@@ -100,39 +96,49 @@ struct InvariantRuleEngineTests {
         )
 
         let violations = try await InvariantRuleEngine.evaluate(
-            rules: [.forbidDependents(name: "heavy-confined", heavy: "live", except: ["live", "app"])],
+            rules: [.forbidDependents(name: "* => live", heavy: "live", except: ["live", "app"])],
             graph: graph,
             scope: graph.nonTestNodes,
-            labeler: makeLabeler(),
+            labels: layers(for: graph.nonTestNodes),
         )
 
-        // The allowed live dependent passes; the feature and any unlabeled dependent violate.
-        // Note: heavy targets themselves are labeled live, so allowed -> heavy is fine both ways
-        #expect(violations.contains { $0.key == "heavy-confined: P/HomeFeature -> P/HeavyClientLive" })
+        #expect(violations.contains { $0.key == "* => live: P/HomeFeature -> P/HeavyClientLive" })
         #expect(!violations.contains { $0.key.contains("OtherUseCaseLive ->") })
     }
 
-    @Test("ラベル解決は明示指定がregexより優先される")
-    func explicitLabelWinsOverRegex() throws {
-        let labeler = try TargetLabeler(
-            explicit: ["SpecialFeature": "model"],
-            regexRules: [.init(pattern: "Feature$", label: "feature")],
-            sdkProducts: [],
+    @Test("完全一致layerはregexより優先され、未マッチのtargetはlayerなしになる")
+    func exactNamesWinOverRegex() throws {
+        let labeler = try TargetLabeler(layers: [
+            "model": .names(["SpecialFeature"]),
+            "feature": .regex("Feature$"),
+        ])
+
+        let resolved = try labeler.resolveLayers(
+            for: [target("SpecialFeature"), target("NormalFeature"), target("Unmatched")],
+            weights: nil,
         )
 
-        #expect(labeler.label(of: target("SpecialFeature")) == "model")
-        #expect(labeler.label(of: target("NormalFeature")) == "feature")
-        #expect(labeler.label(of: target("Unmatched")) == nil)
+        #expect(resolved[target("SpecialFeature")] == "model")
+        #expect(resolved[target("NormalFeature")] == "feature")
+        #expect(resolved[target("Unmatched")] == nil)
+    }
+
+    @Test("1 targetが複数regexにマッチしたら順序で黙って解決せずエラーになる")
+    func ambiguousRegexLayersThrow() throws {
+        let labeler = try TargetLabeler(layers: [
+            "a": .regex("Feature$"),
+            "b": .regex("^Home"),
+        ])
+
+        #expect(throws: TargetLabeler.Error.self) {
+            try labeler.resolveLayers(for: [target("HomeFeature")], weights: nil)
+        }
     }
 
     @Test("不正なregexパターンはエラーになる")
     func invalidRegexPatternThrows() {
         #expect(throws: TargetLabeler.Error.self) {
-            try TargetLabeler(
-                explicit: [:],
-                regexRules: [.init(pattern: "([", label: "broken")],
-                sdkProducts: [],
-            )
+            try TargetLabeler(layers: ["broken": .regex("([")])
         }
     }
 }

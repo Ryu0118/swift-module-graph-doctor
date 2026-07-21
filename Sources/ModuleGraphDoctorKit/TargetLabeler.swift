@@ -1,83 +1,106 @@
 import Foundation
 
-/// Assigns architecture-layer labels to targets.
+/// Resolves layer membership for targets from the `layers:` configuration.
 ///
-/// Resolution order (first match wins):
-/// 1. Explicit per-target labels (e.g. `SharedModel: model`)
-/// 2. Regex rules evaluated in declaration order (e.g. `(Client|UseCase)Live$ -> live`)
-/// 3. Unlabeled targets stay label-less; rules simply do not match them.
-///
-/// External products (dependencies not resolved to local targets) are labeled
-/// separately via the `sdk` name list, so rules like `forbid-reach: interface -> sdk`
-/// can gate transitive leaks of external SDKs.
+/// Precedence per target: exact names > regex > weight threshold. Within the
+/// regex tier a target matching two different layers is a configuration error
+/// (reported with the target and both layers) rather than being resolved by
+/// declaration order -- YAML mapping order is not reliable, and silent
+/// order-dependent resolution would be a trap
 package struct TargetLabeler: Sendable {
-    /// A single regex labeling rule
-    package struct RegexRule: Sendable {
-        /// Regular expression matched against the target name
-        package let pattern: String
-        /// Label assigned on match
-        package let label: String
+    private let exactNames: [String: String]
+    private let regexes: [(layer: String, regex: NSRegularExpression)]
+    private let weightThresholds: [(layer: String, seconds: Double)]
+    /// Exact names per layer; used to match external products (e.g. SDKs)
+    package let externalNames: [String: Set<String>]
 
-        /// Creates a rule from a pattern and label
-        package init(pattern: String, label: String) {
-            self.pattern = pattern
-            self.label = label
-        }
-    }
-
-    private let explicit: [String: String]
-    private let regexRules: [(NSRegularExpression, String)]
-    private let sdkProducts: Set<String>
-
-    /// Errors thrown while building the labeler
-    package enum Error: Swift.Error, LocalizedError {
+    /// Errors thrown while building or applying the layer configuration
+    package enum Error: Swift.Error, LocalizedError, Equatable {
         /// A regex pattern failed to compile
-        case invalidPattern(String)
+        case invalidPattern(layer: String, pattern: String)
+        /// A target matches two layers in the same tier
+        case ambiguousLayer(target: String, layers: [String])
 
         /// Human-readable error message
         package var errorDescription: String? {
             switch self {
-            case let .invalidPattern(pattern): "invalid label regex pattern: \(pattern)"
+            case let .invalidPattern(layer, pattern):
+                "layer '\(layer)' has an invalid regex: \(pattern)"
+            case let .ambiguousLayer(target, layers):
+                "target '\(target)' matches multiple layers (\(layers.joined(separator: ", "))); "
+                    + "make the definitions unambiguous"
             }
         }
     }
 
-    /// Builds a labeler. `explicit` maps target names (or `package/target`) to labels;
-    /// `sdkProducts` lists external product names to label as SDKs
-    package init(
-        explicit: [String: String],
-        regexRules: [RegexRule],
-        sdkProducts: Set<String>,
-    ) throws {
-        self.explicit = explicit
-        self.regexRules = try regexRules.map { rule in
-            guard let regex = try? NSRegularExpression(pattern: rule.pattern) else {
-                throw Error.invalidPattern(rule.pattern)
+    /// Builds a resolver from `layers:` (layer name -> spec)
+    package init(layers: [String: Configuration.LayerSpec]) throws {
+        var exact: [String: String] = [:]
+        var regexList: [(String, NSRegularExpression)] = []
+        var thresholds: [(String, Double)] = []
+        var externals: [String: Set<String>] = [:]
+
+        for (layer, spec) in layers.sorted(by: { $0.key < $1.key }) {
+            switch spec {
+            case let .names(names):
+                for name in names {
+                    exact[name] = layer
+                }
+                externals[layer] = Set(names)
+            case let .regex(pattern):
+                guard let regex = try? NSRegularExpression(pattern: pattern) else {
+                    throw Error.invalidPattern(layer: layer, pattern: pattern)
+                }
+                regexList.append((layer, regex))
+            case let .weightAtLeast(seconds):
+                thresholds.append((layer, seconds))
             }
-            return (regex, rule.label)
         }
-        self.sdkProducts = sdkProducts
+        exactNames = exact
+        regexes = regexList
+        weightThresholds = thresholds
+        externalNames = externals
     }
 
-    /// Returns the label for a local target, or nil when nothing matches
-    package func label(of target: TargetID) -> String? {
-        if let byFullName = explicit[target.description] {
+    /// Resolves the layer of every target in `scope`. Unmatched targets are absent
+    package func resolveLayers(
+        for scope: Set<TargetID>,
+        weights: TargetWeights?,
+    ) throws -> [TargetID: String] {
+        var resolved: [TargetID: String] = [:]
+        for target in scope {
+            if let layer = try layer(of: target, weights: weights) {
+                resolved[target] = layer
+            }
+        }
+        return resolved
+    }
+
+    private func layer(of target: TargetID, weights: TargetWeights?) throws -> String? {
+        if let byFullName = exactNames[target.description] {
             return byFullName
         }
-        if let byName = explicit[target.targetName] {
+        if let byName = exactNames[target.targetName] {
             return byName
         }
-        for (regex, label) in regexRules {
-            let range = NSRange(target.targetName.startIndex..., in: target.targetName)
-            if regex.firstMatch(in: target.targetName, range: range) != nil {
-                return label
-            }
+        let name = target.targetName
+        let range = NSRange(name.startIndex..., in: name)
+        let regexMatches = regexes
+            .filter { $0.regex.firstMatch(in: name, range: range) != nil }
+            .map(\.layer)
+        if regexMatches.count > 1 {
+            throw Error.ambiguousLayer(target: target.description, layers: regexMatches.sorted())
         }
-        return nil
-    }
-
-    /// Whether an external product name is labeled as an SDK
-    package func isSDK(externalProduct: String) -> Bool {
-        sdkProducts.contains(externalProduct)
+        if let layer = regexMatches.first {
+            return layer
+        }
+        guard let weights else { return nil }
+        let weightMatches = weightThresholds
+            .filter { weights.weight(of: name) >= $0.seconds }
+            .map(\.layer)
+        if weightMatches.count > 1 {
+            throw Error.ambiguousLayer(target: target.description, layers: weightMatches.sorted())
+        }
+        return weightMatches.first
     }
 }

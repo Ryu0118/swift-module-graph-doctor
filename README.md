@@ -23,7 +23,7 @@ the graph never quietly degrades again.
   - [check](#check)
   - [weights](#weights)
 - [Configuration](#configuration)
-- [Architecture Invariants](#architecture-invariants)
+- [Graph Lint](#graph-lint)
 - [JSON Output](#json-output)
 - [Installation](#installation)
 - [Development](#development)
@@ -39,10 +39,10 @@ the graph never quietly degrades again.
   fails the build when the simulated makespan regresses, the critical path
   grows, or a feature's closure cost jumps, and prints the exact new edges
   that caused it.
-- 🏛️ **Architecture invariants** — declare layering rules like "features never
-  depend on live implementations" or "interfaces never reach an external SDK"
-  as labeled reachability predicates; violations come with a witness path.
-  A violations baseline lets legacy codebases adopt rules incrementally.
+- 🏛️ **Graph lint** — classify targets into layers and deny relations with a
+  two-token rule (`deny: feature -> live`, `deny: interface => sdk`); violations
+  come with a witness path, and a violations baseline lets legacy codebases
+  adopt rules incrementally.
 - ⚖️ **Measured weights** — feed an [XCLogParser](https://github.com/MobileNativeFoundation/XCLogParser)
   report and every feature gets a real number: how many compile-seconds its
   closure pulls in.
@@ -100,7 +100,7 @@ git add graph-baseline.json
 ```
 
 ```text
-[error] invariant violation: feature-no-live: MyApp/HomeFeature -> Core/TimelineClientLive (path: MyApp/HomeFeature -> Core/TimelineClientLive)
+[error] lint violation: feature -> live: MyApp/HomeFeature -> Core/TimelineClientLive (path: MyApp/HomeFeature -> Core/TimelineClientLive)
 [info] new edge: MyApp/HomeFeature -> Core/TimelineClientLive
 (exit code 1)
 ```
@@ -161,7 +161,7 @@ What is gated, and at which severity:
 | simulated makespan regressed | warning at +0.5s, **error at +1.0s** |
 | critical path grew | warning |
 | feature cost regressed | warning at +10s, **error at +30s** |
-| new invariant violation (not in the violations baseline) | **error**, with witness path |
+| new lint violation (not in the violations baseline) | **error**, with witness path |
 | violation in baseline no longer observed | info (prune the stale entry) |
 | new / removed edges, target count changes | info |
 
@@ -207,22 +207,19 @@ topCount: 15                       # rows shown in load / cost rankings
 
 weights: "weights.yml"             # optional, written by the weights command
 
-labels:                            # optional, powers the invariants
-  explicit: { AppFeature: app }    # highest priority
-  rules:                           # regexes on the target name, first match wins
-    - { pattern: "(Client|UseCase)Live$", label: live }
-    - { pattern: "Feature$",              label: feature }
-    - { pattern: "(Client|UseCase)$",     label: interface }
-  sdk: [FirebaseFirestore, GRDB]   # external products treated as label `sdk`
-  heavyThresholdSeconds: 60        # weights >= 60s get label `heavy`
+layers:                            # optional, powers the lint rules.
+  app: [AppFeature]                # list   = exact target names (also matches external products)
+  live: "(Client|UseCase)Live$"    # string = regex on the target name
+  feature: "Feature$"
+  interface: "(Client|UseCase)$"
+  sdk: [FirebaseFirestore, GRDB]
+  heavy: 60                        # number = any target measured at >= 60s
 
-invariants:
-  - name: feature-no-live
-    forbidEdge: { from: feature, to: live }
-  - name: interface-no-sdk
-    forbidReach: { from: interface, to: sdk }
-  - name: heavy-confined
-    forbidDependents: { of: heavy, except: [live, app] }
+lint:
+  - deny: feature -> live          # ->  forbids the direct edge
+  - deny: interface => sdk         # =>  forbids any transitive path
+  - deny: "* => heavy"             # nobody may depend on heavy targets...
+    allow: [live, app]             # ...except these layers
 
 check:
   baseline: "graph-baseline.json"
@@ -233,21 +230,21 @@ check:
   featureCostErrorSeconds: 30
 ```
 
-## Architecture Invariants
+## Graph Lint
 
-Three rule shapes, all evaluated as O(V+E) reachability queries over the
-labeled graph:
+Classify targets into **layers**, then **deny** relations between them.
+A layer is defined by a regex on the target name (string), an exact name list
+(list — these also match external products, which is how `sdk` works), or a
+measured-weight threshold in seconds (number). A target matching two layers is
+a configuration error, not a silent order-dependent pick.
 
-- `forbidEdge { from, to }` — no **direct** edge from a `from`-labeled target
-  to a `to`-labeled target.
-- `forbidReach { from, to }` — no **transitive** path either. `to: sdk` also
-  matches external products from the `labels.sdk` list, which catches leaks
-  that import-statement linting cannot see (the SDK arriving through a chain
-  of intermediate modules).
-- `forbidDependents { of, except }` — everything that (transitively) depends
-  on an `of`-labeled target must carry one of the `except` labels. Combine
-  with `heavyThresholdSeconds` to keep measured-heavy modules confined to the
-  implementation layer.
+Three rule shapes, all O(V+E) reachability queries:
+
+| Rule | Meaning |
+|---|---|
+| `deny: A -> B` | no direct edge from an A-layer target to a B-layer target |
+| `deny: A => B` | no transitive path either — catches leaks that import-statement linting cannot see (the SDK arriving through a chain of intermediate modules) |
+| `deny: "* => B"` + `allow: [...]` | nothing may depend on B-layer targets except the allowed layers |
 
 Every violation is reported with a witness path
 (`A -> B -> C -> FirebaseFirestore`), and known violations live in a committed

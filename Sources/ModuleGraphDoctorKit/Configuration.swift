@@ -35,10 +35,10 @@ package struct Configuration: Decodable, Sendable, Equatable {
     package let topCount: Int?
     /// Baseline gate settings (optional; defaults apply when omitted)
     package let check: Check?
-    /// Target labeling settings for architecture invariants (optional)
-    package let labels: Labels?
-    /// Architecture invariant rules (optional)
-    package let invariants: [InvariantSpec]?
+    /// Layer definitions: layer name -> membership spec (optional)
+    package let layers: [String: LayerSpec]?
+    /// Lint rules over the layers (optional)
+    package let lint: [LintRule]?
     /// Target weights file path (YAML, target name -> seconds). Optional
     package let weights: String?
 
@@ -50,8 +50,8 @@ package struct Configuration: Decodable, Sendable, Equatable {
         case cores
         case topCount
         case check
-        case labels
-        case invariants
+        case layers
+        case lint
         case weights
     }
 
@@ -65,8 +65,8 @@ package struct Configuration: Decodable, Sendable, Equatable {
         cores = try container.decodeIfPresent(Int.self, forKey: .cores)
         topCount = try container.decodeIfPresent(Int.self, forKey: .topCount)
         check = try container.decodeIfPresent(Check.self, forKey: .check)
-        labels = try container.decodeIfPresent(Labels.self, forKey: .labels)
-        invariants = try container.decodeIfPresent([InvariantSpec].self, forKey: .invariants)
+        layers = try container.decodeIfPresent([String: LayerSpec].self, forKey: .layers)
+        lint = try container.decodeIfPresent([LintRule].self, forKey: .lint)
         weights = try container.decodeIfPresent(String.self, forKey: .weights)
     }
 
@@ -80,95 +80,43 @@ package struct Configuration: Decodable, Sendable, Equatable {
         return try container.decodeIfPresent([String].self, forKey: key)
     }
 
-    /// Target labeling settings. Resolution order: explicit -> regex rules (declaration order)
-    package struct Labels: Decodable, Sendable, Equatable {
-        /// Explicit target-name (or `package/target`) to label mapping
-        package let explicit: [String: String]?
-        /// Regex rules matched against the target name, evaluated in order
-        package let rules: [Rule]?
-        /// External product names labeled as SDKs (for `forbid-reach: ... -> sdk`)
-        package let sdk: [String]?
-        /// Auto-label targets whose measured weight is at or above this many seconds as `heavy`
-        package let heavyThresholdSeconds: Double?
+    /// How a layer's members are declared: a regex on the target name,
+    /// an exact name list (which also matches external products), or a
+    /// measured-weight threshold in seconds
+    package enum LayerSpec: Decodable, Sendable, Equatable {
+        /// Regex matched against the target name
+        case regex(String)
+        /// Exact target names; also matches external product names
+        case names([String])
+        /// Every target whose measured weight is at least this many seconds
+        case weightAtLeast(Double)
 
-        /// A regex labeling rule
-        package struct Rule: Decodable, Sendable, Equatable {
-            /// Regular expression matched against the target name
-            package let pattern: String
-            /// Label assigned on match
-            package let label: String
-
-            /// Builds directly, for tests
-            package init(pattern: String, label: String) {
-                self.pattern = pattern
-                self.label = label
+        /// Decodes from a string (regex), list (names), or number (seconds)
+        package init(from decoder: any Decoder) throws {
+            let container = try decoder.singleValueContainer()
+            if let names = try? container.decode([String].self) {
+                self = .names(names)
+            } else if let seconds = try? container.decode(Double.self) {
+                self = .weightAtLeast(seconds)
+            } else {
+                self = try .regex(container.decode(String.self))
             }
-        }
-
-        /// Builds directly, for tests
-        package init(
-            explicit: [String: String]? = nil,
-            rules: [Rule]? = nil,
-            sdk: [String]? = nil,
-            heavyThresholdSeconds: Double? = nil,
-        ) {
-            self.explicit = explicit
-            self.rules = rules
-            self.sdk = sdk
-            self.heavyThresholdSeconds = heavyThresholdSeconds
         }
     }
 
-    /// Declarative invariant rule. Exactly one of the three rule bodies must be present
-    package struct InvariantSpec: Decodable, Sendable, Equatable {
-        /// Rule name used in reports and the violations baseline
-        package let name: String
-        /// Forbids direct edges between two labels
-        package let forbidEdge: LabelPair?
-        /// Forbids transitive reachability between two labels (`to: sdk` also matches externals)
-        package let forbidReach: LabelPair?
-        /// Restricts transitive dependents of a label to an allowlist of labels
-        package let forbidDependents: DependentsSpec?
-
-        /// A (from, to) label pair
-        package struct LabelPair: Decodable, Sendable, Equatable {
-            /// Source label
-            package let from: String
-            /// Destination label
-            package let to: String
-
-            /// Builds directly, for tests
-            package init(from: String, to: String) {
-                self.from = from
-                self.to = to
-            }
-        }
-
-        /// Body of a forbid-dependents rule
-        package struct DependentsSpec: Decodable, Sendable, Equatable {
-            /// Label of the protected (heavy) targets
-            package let of: String
-            /// Labels allowed to depend on them
-            package let except: [String]
-
-            /// Builds directly, for tests
-            package init(of: String, except: [String]) {
-                self.of = of
-                self.except = except
-            }
-        }
+    /// A lint rule. `deny` uses a tiny DSL over layer names:
+    /// `A -> B` forbids direct edges, `A => B` forbids transitive reachability,
+    /// and `* => B` with `allow:` restricts who may depend on B at all
+    package struct LintRule: Decodable, Sendable, Equatable {
+        /// The denied relation, e.g. `feature -> live` or `interface => sdk`
+        package let deny: String
+        /// Layers still allowed to depend on the target of a `* => B` rule
+        package let allow: [String]?
 
         /// Builds directly, for tests
-        package init(
-            name: String,
-            forbidEdge: LabelPair? = nil,
-            forbidReach: LabelPair? = nil,
-            forbidDependents: DependentsSpec? = nil,
-        ) {
-            self.name = name
-            self.forbidEdge = forbidEdge
-            self.forbidReach = forbidReach
-            self.forbidDependents = forbidDependents
+        package init(deny: String, allow: [String]? = nil) {
+            self.deny = deny
+            self.allow = allow
         }
     }
 
@@ -214,8 +162,8 @@ package struct Configuration: Decodable, Sendable, Equatable {
         cores: Int? = nil,
         topCount: Int? = nil,
         check: Check? = nil,
-        labels: Labels? = nil,
-        invariants: [InvariantSpec]? = nil,
+        layers: [String: LayerSpec]? = nil,
+        lint: [LintRule]? = nil,
         weights: String? = nil,
     ) {
         self.path = path
@@ -225,8 +173,8 @@ package struct Configuration: Decodable, Sendable, Equatable {
         self.cores = cores
         self.topCount = topCount
         self.check = check
-        self.labels = labels
-        self.invariants = invariants
+        self.layers = layers
+        self.lint = lint
         self.weights = weights
     }
 

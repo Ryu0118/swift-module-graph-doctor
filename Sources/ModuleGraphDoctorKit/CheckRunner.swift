@@ -132,7 +132,7 @@ package struct CheckRunner: Sendable {
             scope: analysis.scope,
             weights: analysis.weights,
         )
-        guard !violations.isEmpty || configuration.invariants?.isEmpty == false else { return [] }
+        guard !violations.isEmpty || configuration.lint?.isEmpty == false else { return [] }
         let baselineURL = violationsBaselineURL(configuration: configuration, baseDirectory: baseDirectory)
         let known = try InvariantChecker.ViolationsBaseline.load(from: baselineURL)
 
@@ -140,7 +140,7 @@ package struct CheckRunner: Sendable {
         for violation in violations where !known.contains(violation.key) {
             findings.append(BaselineGate.Finding(
                 severity: .error,
-                message: "invariant violation: \(violation.key) (path: \(violation.path.joined(separator: " -> ")))",
+                message: "lint violation: \(violation.key) (path: \(violation.path.joined(separator: " -> ")))",
             ))
         }
         let observed = Set(violations.map(\.key))

@@ -2,7 +2,8 @@ import FileManagerProtocol
 import Foundation
 import Yams
 
-/// Bridges configuration to the invariant engine and applies the violations baseline.
+/// Bridges the `layers:` / `lint:` configuration to the rule engine and applies
+/// the violations baseline.
 ///
 /// Known violations are committed to `violations-baseline.yml` (boy-scout style):
 /// only violations whose stable keys are absent from the baseline are reported as
@@ -10,68 +11,54 @@ import Yams
 package enum InvariantChecker {
     /// Errors thrown while interpreting the configuration
     package enum Error: Swift.Error, LocalizedError {
-        /// An invariant spec has zero or multiple rule bodies
-        case ambiguousRule(String)
+        /// The deny DSL string is malformed
+        case invalidRule(String)
+        /// `allow:` is only meaningful on a `* => layer` rule
+        case allowRequiresWildcard(String)
 
         /// Human-readable error message
         package var errorDescription: String? {
             switch self {
-            case let .ambiguousRule(name):
-                "invariant '\(name)' must declare exactly one of forbidEdge / forbidReach / forbidDependents"
+            case let .invalidRule(rule):
+                "lint rule '\(rule)' is malformed; expected 'A -> B' (direct), "
+                    + "'A => B' (transitive), or '* => B' with allow:"
+            case let .allowRequiresWildcard(rule):
+                "lint rule '\(rule)' uses allow:, which only applies to '* => layer' rules"
             }
         }
     }
 
-    /// Builds the labeler from the configuration (empty labeler when unconfigured).
-    /// When `labels.heavyThresholdSeconds` is set and weights are available, targets
-    /// at or above the threshold are auto-labeled `heavy` (user explicit labels win)
-    package static func makeLabeler(
-        configuration: Configuration,
-        weights: TargetWeights? = nil,
-    ) throws -> TargetLabeler {
-        let labels = configuration.labels
-        var explicit = labels?.explicit ?? [:]
-        if let threshold = labels?.heavyThresholdSeconds, let weights {
-            for (name, value) in weights.seconds where value >= threshold {
-                if explicit[name] == nil {
-                    explicit[name] = "heavy"
-                }
-            }
-        }
-        return try TargetLabeler(
-            explicit: explicit,
-            regexRules: (labels?.rules ?? []).map {
-                TargetLabeler.RegexRule(pattern: $0.pattern, label: $0.label)
-            },
-            sdkProducts: Set(labels?.sdk ?? []),
-        )
-    }
-
-    /// Converts invariant specs into engine rules, validating that each spec has exactly one body
+    /// Parses the deny DSL into engine rules.
+    ///
+    /// - `A -> B`  : forbid direct edges from layer A to layer B
+    /// - `A => B`  : forbid transitive reachability from A to B
+    /// - `* => B`  : forbid all dependents of B except the `allow:` layers
     package static func makeRules(configuration: Configuration) throws -> [InvariantRuleEngine.Rule] {
-        try (configuration.invariants ?? []).map { spec in
-            let bodies = [spec.forbidEdge != nil, spec.forbidReach != nil, spec.forbidDependents != nil]
-            guard bodies.count(where: { $0 }) == 1 else {
-                throw Error.ambiguousRule(spec.name)
+        try (configuration.lint ?? []).map { rule in
+            let name = rule.deny.trimmingCharacters(in: .whitespaces)
+            let transitive = name.contains("=>")
+            let separator = transitive ? "=>" : "->"
+            let parts = name.components(separatedBy: separator)
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+            guard parts.count == 2, !parts[0].isEmpty, !parts[1].isEmpty else {
+                throw Error.invalidRule(rule.deny)
             }
-            if let edge = spec.forbidEdge {
-                return .forbidEdge(name: spec.name, from: edge.from, to: edge.to)
+            if parts[0] == "*" {
+                guard transitive else { throw Error.invalidRule(rule.deny) }
+                return .forbidDependents(
+                    name: name,
+                    heavy: parts[1],
+                    except: Set(rule.allow ?? []),
+                )
             }
-            if let reach = spec.forbidReach {
-                return .forbidReach(name: spec.name, from: reach.from, to: reach.to)
-            }
-            guard let dependents = spec.forbidDependents else {
-                throw Error.ambiguousRule(spec.name)
-            }
-            return .forbidDependents(
-                name: spec.name,
-                heavy: dependents.of,
-                except: Set(dependents.except),
-            )
+            guard rule.allow == nil else { throw Error.allowRequiresWildcard(rule.deny) }
+            return transitive
+                ? .forbidReach(name: name, from: parts[0], to: parts[1])
+                : .forbidEdge(name: name, from: parts[0], to: parts[1])
         }
     }
 
-    /// Evaluates configured invariants over the closure and returns all violations
+    /// Evaluates configured lint rules over the closure and returns all violations
     package static func evaluate(
         configuration: Configuration,
         graph: ModuleGraph,
@@ -80,11 +67,13 @@ package enum InvariantChecker {
     ) async throws -> [InvariantRuleEngine.Violation] {
         let rules = try makeRules(configuration: configuration)
         guard !rules.isEmpty else { return [] }
+        let labeler = try TargetLabeler(layers: configuration.layers ?? [:])
         return try await InvariantRuleEngine.evaluate(
             rules: rules,
             graph: graph,
             scope: scope,
-            labeler: makeLabeler(configuration: configuration, weights: weights),
+            labels: labeler.resolveLayers(for: scope, weights: weights),
+            externalNames: labeler.externalNames,
         )
     }
 

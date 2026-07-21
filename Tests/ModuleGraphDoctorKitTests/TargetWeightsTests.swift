@@ -125,23 +125,23 @@ struct TargetWeightsTests {
         #expect(findings.contains { $0.severity == .warning && $0.message.contains("P/LeanFeature") })
     }
 
-    @Test("heavyThresholdSecondsで重みが閾値以上のtargetにheavyラベルが付く（明示指定優先）")
-    func heavyAutoLabelRespectsExplicitPriority() throws {
-        let configuration = Configuration(
-            root: ["P/App"],
-            labels: .init(
-                explicit: ["AlreadyLabeled": "model"],
-                heavyThresholdSeconds: 100,
-            ),
-        )
+    @Test("数値layer（重み閾値）は閾値以上のtargetにマッチし、完全一致が優先される")
+    func weightLayerMatchesAboveThreshold() throws {
+        let labeler = try TargetLabeler(layers: [
+            "model": .names(["AlreadyLabeled"]),
+            "heavy": .weightAtLeast(100),
+        ])
         let weights = TargetWeights(seconds: [
             "BigLib": 400, "SmallLib": 5, "AlreadyLabeled": 900,
         ])
 
-        let labeler = try InvariantChecker.makeLabeler(configuration: configuration, weights: weights)
+        let resolved = try labeler.resolveLayers(
+            for: [target("BigLib"), target("SmallLib"), target("AlreadyLabeled")],
+            weights: weights,
+        )
 
-        #expect(labeler.label(of: target("BigLib")) == "heavy")
-        #expect(labeler.label(of: target("SmallLib")) == nil)
-        #expect(labeler.label(of: target("AlreadyLabeled")) == "model")
+        #expect(resolved[target("BigLib")] == "heavy")
+        #expect(resolved[target("SmallLib")] == nil)
+        #expect(resolved[target("AlreadyLabeled")] == "model")
     }
 }

@@ -4,73 +4,64 @@ import Testing
 
 @Suite
 struct InvariantCheckerTests {
-    @Test("設定のinvariants節がエンジンのルールへ変換される")
-    func convertsSpecsToRules() throws {
+    @Test("deny DSLがエンジンのルールへ変換される")
+    func parsesDenyDSL() throws {
         let configuration = Configuration(
             root: ["P/App"],
-            invariants: [
-                .init(name: "feature-no-live", forbidEdge: .init(from: "feature", to: "live")),
-                .init(name: "interface-no-sdk", forbidReach: .init(from: "interface", to: "sdk")),
-                .init(name: "heavy-confined", forbidDependents: .init(of: "heavy", except: ["live"])),
+            lint: [
+                .init(deny: "feature -> live"),
+                .init(deny: "interface => sdk"),
+                .init(deny: "* => heavy", allow: ["live", "app"]),
             ],
         )
 
         let rules = try InvariantChecker.makeRules(configuration: configuration)
 
         #expect(rules == [
-            .forbidEdge(name: "feature-no-live", from: "feature", to: "live"),
-            .forbidReach(name: "interface-no-sdk", from: "interface", to: "sdk"),
-            .forbidDependents(name: "heavy-confined", heavy: "heavy", except: ["live"]),
+            .forbidEdge(name: "feature -> live", from: "feature", to: "live"),
+            .forbidReach(name: "interface => sdk", from: "interface", to: "sdk"),
+            .forbidDependents(name: "* => heavy", heavy: "heavy", except: ["live", "app"]),
         ])
     }
 
-    @Test("ルール本体が0個または2個以上のinvariantはエラーになる")
-    func ambiguousSpecThrows() {
-        let empty = Configuration(
-            root: ["P/App"],
-            invariants: [.init(name: "broken")],
-        )
-        let double = Configuration(
-            root: ["P/App"],
-            invariants: [.init(
-                name: "broken",
-                forbidEdge: .init(from: "a", to: "b"),
-                forbidReach: .init(from: "a", to: "b"),
-            )],
-        )
-
-        #expect(throws: InvariantChecker.Error.self) {
-            try InvariantChecker.makeRules(configuration: empty)
-        }
-        #expect(throws: InvariantChecker.Error.self) {
-            try InvariantChecker.makeRules(configuration: double)
+    @Test("不正なdeny DSLはエラーになる")
+    func malformedDSLThrows() {
+        let cases = [
+            Configuration(root: ["P/App"], lint: [.init(deny: "feature")]),
+            Configuration(root: ["P/App"], lint: [.init(deny: "* -> live")]),
+            Configuration(root: ["P/App"], lint: [.init(deny: "a -> b", allow: ["c"])]),
+        ]
+        for configuration in cases {
+            #expect(throws: InvariantChecker.Error.self) {
+                try InvariantChecker.makeRules(configuration: configuration)
+            }
         }
     }
 
-    @Test("labels/invariants入りYAMLがデコードできる")
-    func decodesLabelsAndInvariantsYAML() throws {
+    @Test("layers/lint入りYAMLがデコードできる")
+    func decodesLayersAndLintYAML() throws {
         let yaml = """
         root: MyApp/AppFeature
-        labels:
-          explicit:
-            SharedKit: model
-          rules:
-            - { pattern: "Feature$", label: feature }
-            - { pattern: "(Client|UseCase)Live$", label: live }
-          sdk: ["SomeDatabaseSDK"]
-        invariants:
-          - name: feature-no-live
-            forbidEdge: { from: feature, to: live }
+        layers:
+          feature: "Feature$"
+          app: [AppFeature]
+          sdk: [SomeDatabaseSDK]
+          heavy: 60
+        lint:
+          - deny: feature -> live
+          - deny: "* => heavy"
+            allow: [live, app]
         check:
           violationsBaseline: "custom-violations.yml"
         """
 
         let configuration = try Configuration.decode(yaml: yaml)
 
-        #expect(configuration.labels?.explicit == ["SharedKit": "model"])
-        #expect(configuration.labels?.rules?.count == 2)
-        #expect(configuration.labels?.sdk == ["SomeDatabaseSDK"])
-        #expect(configuration.invariants?.first?.name == "feature-no-live")
+        #expect(configuration.layers?["feature"] == .regex("Feature$"))
+        #expect(configuration.layers?["app"] == .names(["AppFeature"]))
+        #expect(configuration.layers?["heavy"] == .weightAtLeast(60))
+        #expect(configuration.lint?.count == 2)
+        #expect(configuration.lint?[1].allow == ["live", "app"])
         #expect(configuration.check?.violationsBaseline == "custom-violations.yml")
     }
 

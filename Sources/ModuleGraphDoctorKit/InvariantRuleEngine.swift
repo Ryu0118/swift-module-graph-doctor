@@ -49,7 +49,8 @@ package enum InvariantRuleEngine {
         let graph: ModuleGraph
         let scope: Set<TargetID>
         let labels: [TargetID: String]
-        let labeler: TargetLabeler
+        /// Exact names per layer, used to match external products
+        let externalNames: [String: Set<String>]
     }
 
     /// Evaluates all rules over the closure `scope`.
@@ -58,15 +59,10 @@ package enum InvariantRuleEngine {
         rules: [Rule],
         graph: ModuleGraph,
         scope: Set<TargetID>,
-        labeler: TargetLabeler,
+        labels: [TargetID: String],
+        externalNames: [String: Set<String>] = [:],
     ) async -> [Violation] {
-        var labels: [TargetID: String] = [:]
-        for node in scope {
-            if let label = labeler.label(of: node) {
-                labels[node] = label
-            }
-        }
-        let context = Context(graph: graph, scope: scope, labels: labels, labeler: labeler)
+        let context = Context(graph: graph, scope: scope, labels: labels, externalNames: externalNames)
         var violations: [Violation] = []
         for rule in rules {
             switch rule {
@@ -134,9 +130,9 @@ package enum InvariantRuleEngine {
         var visited: Set<TargetID> = [source]
         while !queue.isEmpty {
             let current = queue.removeFirst()
-            // External SDK leak: unresolved dependencies of the current node
+            // External leak: unresolved dependencies whose names belong to the target layer
             for external in (context.graph.externalDependencies[current] ?? []).sorted()
-                where targetLabel == "sdk" && context.labeler.isSDK(externalProduct: external)
+                where context.externalNames[targetLabel]?.contains(external) == true
             {
                 violations.append(Violation(
                     rule: name,

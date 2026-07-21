@@ -15,30 +15,18 @@ struct CheckCommand: AsyncParsableCommand {
     @Flag(name: .customLong("update-baseline"), help: "Rewrite the baseline with the current graph")
     var updateBaseline = false
 
-    @Flag(name: .customLong("update-violations"), help: "Rewrite the violations baseline with currently observed invariant violations")
-    var updateViolations = false
-
     func run() async throws {
         let configURL = URL(filePath: configPath)
         let configuration = try Configuration.loadOrDefault(from: configURL)
         let baseDirectory = configURL.absoluteURL.deletingLastPathComponent()
         let runner = CheckRunner()
 
-        if updateBaseline || updateViolations {
-            if updateBaseline {
-                let url = try await runner.updateBaseline(
-                    configuration: configuration,
-                    baseDirectory: baseDirectory,
-                )
-                print("baseline updated: \(url.path(percentEncoded: false))")
-            }
-            if updateViolations {
-                let url = try await runner.updateViolationsBaseline(
-                    configuration: configuration,
-                    baseDirectory: baseDirectory,
-                )
-                print("violations baseline updated: \(url.path(percentEncoded: false))")
-            }
+        if updateBaseline {
+            let url = try await runner.updateBaseline(
+                configuration: configuration,
+                baseDirectory: baseDirectory,
+            )
+            print("baseline updated: \(url.path(percentEncoded: false))")
             return
         }
 

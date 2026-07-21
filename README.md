@@ -23,7 +23,7 @@ the graph never quietly degrades again.
   - [check](#check)
   - [weights](#weights)
 - [Configuration](#configuration)
-- [Graph Lint](#graph-lint)
+- [Companion tool: layer rules](#companion-tool-layer-rules)
 - [JSON Output](#json-output)
 - [Agent Skill](#agent-skill)
 - [Installation](#installation)
@@ -41,10 +41,6 @@ the graph never quietly degrades again.
   fails the build when the simulated makespan regresses, the critical path
   grows, or a feature's closure cost jumps, and prints the exact new edges
   that caused it.
-- 🏛️ **Graph lint** — classify targets into layers and deny relations with a
-  two-token rule (`deny: feature -> live`, `deny: interface => sdk`); violations
-  come with a witness path, and a violations baseline lets legacy codebases
-  adopt rules incrementally.
 - ⚖️ **Measured build costs** — feed an [XCLogParser](https://github.com/MobileNativeFoundation/XCLogParser)
   report and every target gets a real number: what building it from scratch
   costs, dependencies included, in compile-seconds.
@@ -102,7 +98,7 @@ git add graph-baseline.json
 ```
 
 ```text
-[error] lint violation: feature -> live: MyApp/HomeFeature -> Core/TimelineClientLive (path: MyApp/HomeFeature -> Core/TimelineClientLive)
+[error] build cost of MyApp/HomeFeature regressed: 96.2s -> 131.0s (+36%)
 [info] new edge: MyApp/HomeFeature -> Core/TimelineClientLive
 (exit code 1)
 ```
@@ -154,7 +150,6 @@ Prints the full report above. `--format json` emits a machine-readable version
 ```sh
 swift-module-graph-doctor check [--config ...]        # gate against baselines (exit 1 on error)
 swift-module-graph-doctor check --update-baseline     # (re)freeze graph-baseline.json
-swift-module-graph-doctor check --update-violations   # (re)freeze violations-baseline.yml
 ```
 
 What is gated, and at which severity:
@@ -164,8 +159,6 @@ What is gated, and at which severity:
 | simulated makespan regressed | warning at +5%, **error at +10%** |
 | critical path grew | warning |
 | a target's build cost regressed | warning at +10%, **error at +25%** |
-| new lint violation (not in the violations baseline) | **error**, with witness path |
-| violation in baseline no longer observed | info (prune the stale entry) |
 | new / removed edges, target count changes | info |
 
 Intentional changes are made visible in review as a diff of the committed
@@ -189,8 +182,7 @@ targets; everything else silently weighs 0), and if the newest log fails with
 Sums the durations of `Compile *` steps per target (deliberately ignoring the
 "Build target" wall time, which includes waiting on other targets) and writes
 a diff-stable `weights.yml`. With weights present, `diagnose` reports build
-costs, `check` gates their regressions, and targets above
-`labels.heavyThresholdSeconds` are auto-labeled `heavy` for invariants.
+costs and `check` gates their regressions.
 
 ## Configuration
 
@@ -218,50 +210,21 @@ topCount: 15                       # rows shown in load / cost rankings
 
 weights: "weights.yml"             # optional, written by the weights command
 
-layers:                            # optional, powers the lint rules.
-  app: [AppFeature]                # list   = exact target names (also matches external products)
-  live: "(Client|UseCase)Live$"    # string = regex on the target name
-  feature: "Feature$"
-  interface: "(Client|UseCase)$"
-  sdk: [FirebaseFirestore, GRDB]
-  heavy: 60                        # number = any target whose own compile time is >= 60s
-
-lint:
-  - deny: feature -> live          # ->  forbids the direct edge
-  - deny: interface => sdk         # =>  forbids any transitive path
-  - deny: "* => heavy"             # nobody may depend on heavy targets...
-    allow: [live, app]             # ...except these layers
-
 check:
   baseline: "graph-baseline.json"
-  violationsBaseline: "violations-baseline.yml"
   makespanWarnPercent: 5        # thresholds are relative to the baseline, so
   makespanErrorPercent: 10      # re-measuring weights on a faster machine
   buildCostWarnPercent: 10      # does not de-calibrate the gates (a small
   buildCostErrorPercent: 25     # absolute noise floor filters tiny baselines)
 ```
 
-## Graph Lint
+## Companion tool: layer rules
 
-Classify targets into **layers**, then **deny** relations between them.
-A layer is defined by a regex on the target name (string), an exact name list
-(list — these also match external products, which is how `sdk` works), or a
-measured-weight threshold in seconds (number). A target matching two layers is
-a configuration error, not a silent order-dependent pick.
-
-Three rule shapes, all O(V+E) reachability queries:
-
-| Rule | Meaning |
-|---|---|
-| `deny: A -> B` | no direct edge from an A-layer target to a B-layer target |
-| `deny: A => B` | no transitive path either — catches leaks that import-statement linting cannot see (the SDK arriving through a chain of intermediate modules) |
-| `deny: "* => B"` + `allow: [...]` | nothing may depend on B-layer targets except the allowed layers |
-
-Every violation is reported with a witness path
-(`A -> B -> C -> FirebaseFirestore`), and known violations live in a committed
-`violations-baseline.yml`: only **new** ones fail the build, so you can turn
-the rules on today in a codebase with a hundred legacy violations and ratchet
-them down over time.
+Layer classification and deny rules (`feature -> live`, `interface => sdk`,
+witness paths, violations baseline) live in the sibling tool
+[swift-module-graph-lint](https://github.com/Ryu0118/swift-module-graph-lint).
+Both tools read the same kind of workspace and share the graph core; run them
+side by side in CI (doctor gates measurements, lint gates layer boundaries).
 
 ## JSON Output
 
@@ -344,14 +307,15 @@ with its SHA-256 checksum.
 
 ## Packages
 
-The tool is split across three repositories, layered bottom-up
-(kit ← lint ← doctor):
+The tool is split across three repositories: swift-module-graph is the
+shared core, and lint / doctor are siblings on top of it
+(graph ← lint, graph ← doctor):
 
 | Repository | Provides |
 |---|---|
 | [swift-module-graph](https://github.com/Ryu0118/swift-module-graph) | `SwiftModuleGraph` — pure graph: extraction (describe + assembly) and the graph model with its queries |
-| [swift-module-graph-lint](https://github.com/Ryu0118/swift-module-graph-lint) | `ModuleGraphLint` — layer classification, deny DSL, invariant rule engine, violations baseline |
-| swift-module-graph-doctor (this repo) | the CLI and all analysis: work-span metrics, import scanning, measured build costs, configuration, runners, baseline gate, report rendering |
+| [swift-module-graph-lint](https://github.com/Ryu0118/swift-module-graph-lint) | sibling CLI: layer classification, deny DSL, invariant rule engine, violations baseline |
+| swift-module-graph-doctor (this repo) | this CLI: work-span metrics, import scanning, measured build costs, baseline gate, report rendering |
 
 ## Development
 

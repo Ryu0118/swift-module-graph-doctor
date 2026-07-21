@@ -1,5 +1,5 @@
 {
-  "originHash" : "874711153e48650e1b6f81a0c608e7e11ff4ca88d81f6f0c7be298baba6328ea",
+  "originHash" : "74da49a28ebd0134dba4eef4c1eae7aaa431889ed4cc90a0ba14d93d19c7746a",
   "pins" : [
     {
       "identity" : "filemanagerprotocol",
@@ -35,15 +35,6 @@
       "state" : {
         "revision" : "de4ad74f50455318a43e386ba8177cc26faf682b",
         "version" : "0.3.0"
-      }
-    },
-    {
-      "identity" : "swift-module-graph-lint",
-      "kind" : "remoteSourceControl",
-      "location" : "git@github.com:Ryu0118/swift-module-graph-lint.git",
-      "state" : {
-        "revision" : "fd3014bd2f8b493f1d18cf2833ae7d22d714e759",
-        "version" : "0.2.0"
       }
     },
     {

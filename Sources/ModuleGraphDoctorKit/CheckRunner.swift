@@ -1,6 +1,5 @@
 import FileManagerProtocol
 import Foundation
-import ModuleGraphLint
 import SwiftModuleGraph
 
 /// Runs the baseline comparison gate: graph extraction, metrics computation, baseline loading, and comparison
@@ -61,17 +60,12 @@ package struct CheckRunner: Sendable {
             buildCostWarnPercent: configuration.check?.buildCostWarnPercent ?? 10,
             buildCostErrorPercent: configuration.check?.buildCostErrorPercent ?? 25,
         )
-        var findings = BaselineGate.evaluate(
+        let findings = BaselineGate.evaluate(
             baseline: baseline,
             current: current.metrics,
             currentEdges: current.edges,
             currentFeatureCosts: current.buildCosts,
             thresholds: thresholds,
-        )
-        findings += try await invariantFindings(
-            configuration: configuration,
-            baseDirectory: baseDirectory,
-            analysis: analysis,
         )
         return Result(findings: findings.sorted { ($0.severity, $1.message) > ($1.severity, $0.message) })
     }
@@ -97,69 +91,6 @@ package struct CheckRunner: Sendable {
         let url = baselineURL(configuration: configuration, baseDirectory: baseDirectory)
         try baseline.save(to: url)
         return url
-    }
-
-    /// Rewrites the violations baseline with the currently observed violations
-    package func updateViolationsBaseline(
-        configuration: Configuration,
-        baseDirectory: URL,
-    ) async throws -> URL {
-        let analysis = try await GraphAnalysisSession.analyze(
-            configuration: configuration,
-            baseDirectory: baseDirectory,
-            extractor: extractor,
-        )
-        let violations = try await GraphLinter.evaluate(
-            layers: configuration.layers ?? [:],
-            lint: configuration.lint ?? [],
-            graph: analysis.graph,
-            scope: analysis.scope,
-            weights: analysis.weights?.seconds,
-        )
-        let url = violationsBaselineURL(configuration: configuration, baseDirectory: baseDirectory)
-        try ViolationsBaseline.save(Set(violations.map(\.key)), to: url)
-        return url
-    }
-
-    /// Evaluates architecture invariants and filters them through the violations baseline.
-    /// New violations are errors; baseline entries no longer observed are reported as info
-    /// so stale entries get cleaned up.
-    private func invariantFindings(
-        configuration: Configuration,
-        baseDirectory: URL,
-        analysis: GraphAnalysisSession.Analysis,
-    ) async throws -> [BaselineGate.Finding] {
-        let violations = try await GraphLinter.evaluate(
-            layers: configuration.layers ?? [:],
-            lint: configuration.lint ?? [],
-            graph: analysis.graph,
-            scope: analysis.scope,
-            weights: analysis.weights?.seconds,
-        )
-        guard !violations.isEmpty || configuration.lint?.isEmpty == false else { return [] }
-        let baselineURL = violationsBaselineURL(configuration: configuration, baseDirectory: baseDirectory)
-        let known = try ViolationsBaseline.load(from: baselineURL)
-
-        var findings: [BaselineGate.Finding] = []
-        for violation in violations where !known.contains(violation.key) {
-            findings.append(BaselineGate.Finding(
-                severity: .error,
-                message: "lint violation: \(violation.key) (path: \(violation.path.joined(separator: " -> ")))",
-            ))
-        }
-        let observed = Set(violations.map(\.key))
-        for stale in known.subtracting(observed).sorted() {
-            findings.append(BaselineGate.Finding(
-                severity: .info,
-                message: "stale violations-baseline entry (violation no longer observed): \(stale)",
-            ))
-        }
-        return findings
-    }
-
-    private func violationsBaselineURL(configuration: Configuration, baseDirectory: URL) -> URL {
-        let raw = configuration.check?.violationsBaseline ?? "violations-baseline.yml"
-        return raw.hasPrefix("/") ? URL(filePath: raw) : baseDirectory.appendingPathComponent(raw)
     }
 
     private struct Snapshot {

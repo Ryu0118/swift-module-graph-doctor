@@ -1,5 +1,4 @@
 import Foundation
-import ModuleGraphLint
 import Yams
 
 /// Model of `module-graph-doctor.yml`.
@@ -36,10 +35,6 @@ package struct Configuration: Decodable, Sendable, Equatable {
     package let topCount: Int?
     /// Baseline gate settings (optional; defaults apply when omitted)
     package let check: Check?
-    /// Layer definitions: layer name -> membership spec (optional)
-    package let layers: [String: LayerSpec]?
-    /// Lint rules over the layers (optional)
-    package let lint: [LintRule]?
     /// Target weights file path (YAML, target name -> seconds). Optional
     package let weights: String?
 
@@ -51,8 +46,6 @@ package struct Configuration: Decodable, Sendable, Equatable {
         case cores
         case topCount
         case check
-        case layers
-        case lint
         case weights
     }
 
@@ -66,8 +59,6 @@ package struct Configuration: Decodable, Sendable, Equatable {
         cores = try container.decodeIfPresent(Int.self, forKey: .cores)
         topCount = try container.decodeIfPresent(Int.self, forKey: .topCount)
         check = try container.decodeIfPresent(Check.self, forKey: .check)
-        layers = try container.decodeIfPresent([String: LayerSpec].self, forKey: .layers)
-        lint = try container.decodeIfPresent([LintRule].self, forKey: .lint)
         weights = try container.decodeIfPresent(String.self, forKey: .weights)
     }
 
@@ -89,8 +80,6 @@ package struct Configuration: Decodable, Sendable, Equatable {
         package let makespanWarnPercent: Double?
         /// Makespan regression (percent of baseline) at or above which check errors. Defaults to 10
         package let makespanErrorPercent: Double?
-        /// Violations baseline file path. Defaults to violations-baseline.yml
-        package let violationsBaseline: String?
         /// Build-cost regression (percent of baseline) at or above which check warns. Defaults to 10
         package let buildCostWarnPercent: Double?
         /// Build-cost regression (percent of baseline) at or above which check errors. Defaults to 25
@@ -101,14 +90,12 @@ package struct Configuration: Decodable, Sendable, Equatable {
             baseline: String? = nil,
             makespanWarnPercent: Double? = nil,
             makespanErrorPercent: Double? = nil,
-            violationsBaseline: String? = nil,
             buildCostWarnPercent: Double? = nil,
             buildCostErrorPercent: Double? = nil,
         ) {
             self.baseline = baseline
             self.makespanWarnPercent = makespanWarnPercent
             self.makespanErrorPercent = makespanErrorPercent
-            self.violationsBaseline = violationsBaseline
             self.buildCostWarnPercent = buildCostWarnPercent
             self.buildCostErrorPercent = buildCostErrorPercent
         }
@@ -123,8 +110,6 @@ package struct Configuration: Decodable, Sendable, Equatable {
         cores: Int? = nil,
         topCount: Int? = nil,
         check: Check? = nil,
-        layers: [String: LayerSpec]? = nil,
-        lint: [LintRule]? = nil,
         weights: String? = nil,
     ) {
         self.path = path
@@ -134,8 +119,6 @@ package struct Configuration: Decodable, Sendable, Equatable {
         self.cores = cores
         self.topCount = topCount
         self.check = check
-        self.layers = layers
-        self.lint = lint
         self.weights = weights
     }
 

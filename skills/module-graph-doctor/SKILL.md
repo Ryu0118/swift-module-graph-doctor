@@ -1,6 +1,6 @@
 ---
 name: module-graph-doctor
-description: Diagnose and gate Swift package module graphs with swift-module-graph-doctor. Use when asked why a multi-package build is slow, whether splitting or flattening modules will help, to measure per-target build cost, to set up module-graph regression gates or layer lint rules (feature/live/sdk boundaries), or to generate build weights from an Xcode build log.
+description: Diagnose and gate Swift package module graphs with swift-module-graph-doctor. Use when asked why a multi-package build is slow, whether splitting or flattening modules will help, to measure per-target build cost, to set up module-graph regression gates, or to generate build weights from an Xcode build log.
 ---
 
 ## What this tool is
@@ -10,8 +10,11 @@ graph of one or more Swift packages. It has two roles:
 
 - **diagnose** — measurement, no pass/fail. Computes the work-span model and
   tells you which bound limits the build.
-- **check** — a gate for CI/pre-merge. Compares against committed baselines
-  and lints layer rules; exit code 1 on regressions or new violations.
+- **check** — a gate for CI/pre-merge. Compares against the committed
+  baseline; exit code 1 on regressions.
+
+Layer rules (feature/live/sdk boundaries, deny DSL, violations baseline) are
+the sibling tool `swift-module-graph-lint` — use it alongside this one.
 
 ## Core concepts (read once)
 
@@ -34,12 +37,6 @@ from a real Xcode build log. Optional; without it every target costs `c`.
 target T from scratch costs, dependencies included. This is the number that
 matters for standalone test-suite builds.
 
-**Layers + lint** — classify targets into layers (regex / exact names /
-weight threshold), then deny relations: `A -> B` (direct edge), `A => B`
-(any transitive path), `"* => B"` with `allow:` (who may depend on B).
-Violations carry a witness path. `violations-baseline.yml` holds known legacy
-violations so only new ones fail.
-
 ## Typical workflows
 
 ### 1. First diagnosis (zero config)
@@ -57,14 +54,13 @@ report it. To focus on one app: `root: AppFeature` in `module-graph-doctor.yml`.
 
 ```sh
 swift-module-graph-doctor check --update-baseline      # writes graph-baseline.json
-swift-module-graph-doctor check --update-violations    # writes violations-baseline.yml (if lint: configured)
-git add graph-baseline.json violations-baseline.yml
+git add graph-baseline.json
 ```
 
 Wire `swift-module-graph-doctor check` into pre-merge checks. Gates are
 relative (% vs baseline) so re-measuring weights on faster hardware does not
 de-calibrate them. Intentional graph changes are reviewed as baseline diffs —
-run the matching `--update-*` command and commit the diff.
+run `check --update-baseline` and commit the diff.
 
 ### 3. Generate weights from a build log
 
@@ -92,9 +88,6 @@ Traps:
 
 ### 4. Interpreting a failed check
 
-- `lint violation: interface => sdk: A -> ExternalSDK (path: A -> B -> C -> ExternalSDK)`
-  — a transitive leak; the path lists the intermediate modules to cut.
-  If intentional, add it to the violations baseline via `--update-violations`.
 - `simulated makespan regressed by +X%` / `build cost of T regressed by +X%`
   — inspect the `new edge:` info lines in the same output; they name the
   exact dependency edges that caused the regression.
@@ -108,18 +101,6 @@ exclude: [VendoredLib]      # skip wrapper/vendored packages (they inflate the c
 costPerTarget: 0.63         # measured c in seconds (default 1.0)
 cores: 10                   # p (default: machine cores)
 weights: weights.yml
-layers:
-  app: [AppFeature]         # list   = exact names (also matches external products)
-  live: "(Client|UseCase)Live$"   # string = regex on target name
-  feature: "Feature$"
-  interface: "(Client|UseCase)$"
-  sdk: [SomeExternalSDK]
-  heavy: 60                 # number = own compile time >= 60s
-lint:
-  - deny: feature -> live
-  - deny: interface => sdk
-  - deny: "* => heavy"
-    allow: [live, app]
 check:
   makespanWarnPercent: 5
   makespanErrorPercent: 10

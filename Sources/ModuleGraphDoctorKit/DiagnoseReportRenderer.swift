@@ -1,57 +1,30 @@
 import Foundation
 
-/// Output formatting for `DiagnoseReport`
+/// Renders a `DiagnoseReport` for humans (text) or machines (JSON).
+///
+/// The text format is deliberately self-explanatory: every metric is printed
+/// with its unit, its formula, and a one-line meaning, and the verdict section
+/// spells out what would (and would not) make the build faster. Nobody should
+/// need this source file to interpret the output.
 package enum DiagnoseReportRenderer {
-    /// Human-readable text format
+    /// Human-readable text report
     package static func text(_ report: DiagnoseReport) -> String {
-        var lines: [String] = []
-        let workSpan = report.workSpan
-        lines.append("Module Graph Diagnosis")
-        lines.append("  roots: \(report.roots.joined(separator: ", "))")
-        lines.append("  c=\(format(report.costPerTarget))s/target, p=\(report.parallelism)")
-        lines.append("")
-        lines.append("Work-span metrics (makespan >= max(T_inf, T_1/p))")
-        lines.append("  N  (targets in closure)   = \(workSpan.targetCount)")
-        lines.append("  D  (critical path length) = \(workSpan.criticalPathLength)")
-        lines.append("  T_1   = \(format(workSpan.totalWork))s")
-        lines.append("  T_inf = \(format(workSpan.criticalPathBound))s")
-        lines.append("  T_1/p = \(format(workSpan.parallelBound))s")
-        lines.append("  makespan^ (simulated)      = \(format(workSpan.simulatedMakespan))s")
-        lines.append("  binding constraint         = \(bindingDescription(workSpan.bindingConstraint))")
-        lines.append("")
-        lines.append("Critical path:")
-        lines.append("  " + workSpan.criticalPath.joined(separator: " -> "))
-        lines.append("")
-        lines.append("Width profile (narrow layers kill parallelism):")
-        for level in workSpan.widthProfile {
-            let sample = level.targets.prefix(5).joined(separator: ", ")
-            let ellipsis = level.targets.count > 5 ? ", …" : ""
-            lines.append(String(
-                format: "  depth %2d: width %3d  %@%@",
-                level.depth,
-                level.width,
-                sample,
-                ellipsis,
-            ))
-        }
+        var sections: [String] = []
+        sections.append(header(report))
+        sections.append(metrics(report))
+        sections.append(verdict(report.workSpan))
+        sections.append(criticalPath(report.workSpan))
+        sections.append(widthProfile(report))
         if let costs = report.topFeatureCosts, !costs.isEmpty {
-            lines.append("")
-            lines.append("Top feature cost (measured build seconds pulled into the closure):")
-            for entry in costs {
-                lines.append(String(format: "  %8.1fs  %@", entry.cost, entry.target))
-            }
+            sections.append(featureCosts(costs))
         }
         if !report.topInterfaceLoads.isEmpty {
-            lines.append("")
-            lines.append("Top interface load (public-import transitive closure size):")
-            for entry in report.topInterfaceLoads {
-                lines.append(String(format: "  %4d  %@", entry.load, entry.target))
-            }
+            sections.append(interfaceLoads(report.topInterfaceLoads))
         }
-        return lines.joined(separator: "\n")
+        return sections.joined(separator: "\n\n")
     }
 
-    /// Machine-readable JSON format (sorted keys, pretty-printed)
+    /// Machine-readable JSON (sorted keys, pretty-printed)
     package static func json(_ report: DiagnoseReport) throws -> String {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -59,18 +32,120 @@ package enum DiagnoseReportRenderer {
         return String(bytes: data, encoding: .utf8) ?? "{}"
     }
 
-    private static func format(_ value: Double) -> String {
-        String(format: "%.1f", value)
+    private static func header(_ report: DiagnoseReport) -> String {
+        """
+        Module graph diagnosis
+        ======================
+        analyzed roots : \(report.roots.joined(separator: ", "))
+        assumptions    : c = \(seconds(report.costPerTarget)) build cost per target, \
+        p = \(report.parallelism) parallel workers
+
+        Model: a build can never finish faster than max(T_inf, T_1/p)
+        (work-span model, a.k.a. Graham bound). The two lower bounds are
+        explained below; whichever is larger is the real bottleneck.
+        """
     }
 
-    private static func bindingDescription(_ binding: WorkSpanMetrics.BindingConstraint) -> String {
-        switch binding {
-        case .criticalPath:
-            "critical path (T_inf) — reduce dependency chain depth"
-        case .parallelism:
-            "parallelism (T_1/p) — reduce total work or add cores"
-        case .balanced:
-            "balanced (knee) — neither depth nor width alone will help"
+    private static func metrics(_ report: DiagnoseReport) -> String {
+        let workSpan = report.workSpan
+        let rows: [(String, String, String)] = [
+            ("N", "\(workSpan.targetCount) targets",
+             "size of the dependency closure (everything the roots pull in)"),
+            ("D", "\(workSpan.criticalPathLength) targets",
+             "longest dependency chain; these can only build one after another"),
+            ("T_1 = N x c", seconds(workSpan.totalWork),
+             "total work if everything built on a single worker"),
+            ("T_inf = D x c", seconds(workSpan.criticalPathBound),
+             "depth bound: even infinite workers cannot beat the serial chain"),
+            ("T_1/p", seconds(workSpan.parallelBound),
+             "width bound: \(report.parallelism) workers cannot beat total work / p"),
+            ("makespan^", seconds(workSpan.simulatedMakespan),
+             "simulated build time with an ideal scheduler on p workers"),
+        ]
+        return rows.map { name, value, meaning in
+            name.padding(toLength: 14, withPad: " ", startingAt: 0)
+                + value.padding(toLength: 14, withPad: " ", startingAt: 0)
+                + meaning
         }
+        .joined(separator: "\n")
+    }
+
+    private static func verdict(_ workSpan: WorkSpanMetrics) -> String {
+        switch workSpan.bindingConstraint {
+        case .criticalPath:
+            """
+            Verdict: DEPTH-BOUND (T_inf > T_1/p)
+              The serial dependency chain is the bottleneck. Flattening the graph
+              (shortening the critical path below) will speed the build up;
+              adding workers or shrinking unrelated targets will not.
+            """
+        case .parallelism:
+            """
+            Verdict: WIDTH-BOUND (T_1/p > T_inf)
+              Total work divided by workers is the bottleneck. Reducing the number
+              of targets, cheapening the per-target cost, or adding workers will
+              speed the build up; shortening the dependency chain alone will not.
+            """
+        case .balanced:
+            """
+            Verdict: BALANCED -- at the knee (the two bounds are within 10%)
+              Neither flattening the dependency chain alone nor adding workers
+              alone will make this build meaningfully faster: as soon as one bound
+              drops, the other becomes the bottleneck. Only changes that lower
+              both (fewer targets, cheaper per-target cost) still pay off.
+            """
+        }
+    }
+
+    private static func criticalPath(_ workSpan: WorkSpanMetrics) -> String {
+        """
+        Critical path (the D-target serial chain; shorten it by removing or
+        rerouting any edge in this chain):
+          \(workSpan.criticalPath.joined(separator: "\n    -> "))
+        """
+    }
+
+    private static func widthProfile(_ report: DiagnoseReport) -> String {
+        var lines: [String] = []
+        lines.append("Width profile (targets per dependency depth; a layer narrower than")
+        lines.append("p = \(report.parallelism) leaves workers idle while the build passes through it):")
+        for level in report.workSpan.widthProfile {
+            let sample = level.targets.prefix(4).joined(separator: ", ")
+            let ellipsis = level.targets.count > 4 ? ", ..." : ""
+            let neck = level.width < report.parallelism ? "  <- narrow" : ""
+            lines.append(String(
+                format: "  depth %2d | width %3d%@  %@%@",
+                level.depth,
+                level.width,
+                neck,
+                sample,
+                ellipsis,
+            ))
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    private static func featureCosts(_ costs: [FeatureCostAnalyzer.CostEntry]) -> String {
+        var lines: [String] = []
+        lines.append("Feature cost (measured compile seconds each feature pulls into its")
+        lines.append("closure; building just this feature's tests costs about this much):")
+        for entry in costs {
+            lines.append(String(format: "  %8.1fs  %@", entry.cost, entry.target))
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    private static func interfaceLoads(_ loads: [InterfaceLoadAnalyzer.LoadEntry]) -> String {
+        var lines: [String] = []
+        lines.append("Interface load (modules transitively re-exposed through public imports;")
+        lines.append("compiling anything that imports these loads this many extra modules):")
+        for entry in loads {
+            lines.append(String(format: "  %4d modules  %@", entry.load, entry.target))
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    private static func seconds(_ value: Double) -> String {
+        String(format: "%.1fs", value)
     }
 }

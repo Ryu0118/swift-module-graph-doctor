@@ -12,7 +12,7 @@ import Yams
 /// exclude: [VendoredLib]    # package dir names to skip
 /// costPerTarget: 0.63       # measured seconds per target (default 1.0)
 /// cores: 10                 # parallel workers (default: machine cores)
-/// weights: weights.yml      # optional measured weights
+/// weights: .module-graph-doctor/weights.yml   # optional measured weights (default)
 /// ```
 package struct Configuration: Decodable, Sendable, Equatable {
     /// Where to look for packages: a single package directory, or a directory
@@ -74,7 +74,8 @@ package struct Configuration: Decodable, Sendable, Equatable {
 
     /// Baseline gate settings
     package struct Check: Decodable, Sendable, Equatable {
-        /// Baseline file path (relative to the config file, or absolute). Defaults to graph-baseline.json
+        /// Baseline file path (relative to the config file, or absolute).
+        /// Defaults to .module-graph-doctor/graph-baseline.json
         package let baseline: String?
         /// Makespan regression (percent of baseline) at or above which check warns. Defaults to 5
         package let makespanWarnPercent: Double?

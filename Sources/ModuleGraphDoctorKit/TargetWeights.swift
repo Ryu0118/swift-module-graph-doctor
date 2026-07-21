@@ -29,8 +29,13 @@ package struct TargetWeights: Sendable, Equatable {
         return try Self(seconds: YAMLDecoder().decode([String: Double].self, from: yaml))
     }
 
-    /// Writes weights sorted by name so the file is diff-stable
+    /// Writes weights sorted by name (diff-stable), creating the parent
+    /// directory if needed
     package func save(to url: URL) throws {
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true,
+        )
         var lines: [String] = []
         for (name, value) in seconds.sorted(by: { $0.key < $1.key }) {
             lines.append("\(name): \(String(format: "%.3f", value))")

@@ -10,7 +10,7 @@ rules:
   message: The CLI surface (subcommands, options, config schema) changed. Update the
     README sections documenting commands and configuration so the README never drifts
     from the actual flags and keys.
-  checksum: 6b6fa7e85c250c448f1c655c24408dd64d2edf1b2f54d1923adbb1c9a9c5bba7
+  checksum: 6b5aa94c2c10bb23696f8140c53210a4a1ccc2d3e41cebd65d8b0b661bd4c139
 - name: readme-analysis-semantics
   sources:
   - Sources/ModuleGraphDoctorKit/WorkSpanAnalyzer.swift

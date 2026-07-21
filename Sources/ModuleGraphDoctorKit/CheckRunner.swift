@@ -128,7 +128,7 @@ package struct CheckRunner: Sendable {
     }
 
     private func baselineURL(configuration: Configuration, baseDirectory: URL) -> URL {
-        let raw = configuration.check?.baseline ?? "graph-baseline.json"
+        let raw = configuration.check?.baseline ?? ".module-graph-doctor/graph-baseline.json"
         return raw.hasPrefix("/") ? URL(filePath: raw) : baseDirectory.appendingPathComponent(raw)
     }
 }

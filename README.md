@@ -37,7 +37,7 @@ the graph never quietly degrades again.
   `makespan >= max(T_inf, T_1/p)` from your real dependency graph and names the
   binding constraint (depth-bound / width-bound / balanced), so you know
   *before* refactoring whether it can pay off.
-- 🚧 **Baseline regression gate** — commit a `graph-baseline.json`; `check`
+- 🚧 **Baseline regression gate** — commit the graph baseline; `check`
   fails the build when the simulated makespan regresses, the critical path
   grows, or a feature's closure cost jumps, and prints the exact new edges
   that caused it.
@@ -91,7 +91,7 @@ rerouting any edge in this chain):
 ```sh
 # Freeze the current state and gate regressions from now on
 swift-module-graph-doctor check --update-baseline
-git add graph-baseline.json
+git add .module-graph-doctor/graph-baseline.json
 
 # Wire `swift-module-graph-doctor check` into your pre-merge checks.
 # From now on this is what a bad PR sees:
@@ -149,7 +149,7 @@ Prints the full report above. `--format json` emits a machine-readable version
 
 ```sh
 swift-module-graph-doctor check [--config ...]        # gate against baselines (exit 1 on error)
-swift-module-graph-doctor check --update-baseline     # (re)freeze graph-baseline.json
+swift-module-graph-doctor check --update-baseline     # (re)freeze the baseline
 ```
 
 What is gated, and at which severity:
@@ -181,7 +181,7 @@ targets; everything else silently weighs 0), and if the newest log fails with
 
 Sums the durations of `Compile *` steps per target (deliberately ignoring the
 "Build target" wall time, which includes waiting on other targets) and writes
-a diff-stable `weights.yml`. With weights present, `diagnose` reports build
+a diff-stable weights file. With weights present, `diagnose` reports build
 costs and `check` gates their regressions.
 
 ## Configuration
@@ -208,10 +208,10 @@ costPerTarget: 0.63                # measured per-target cost c in seconds (defa
 cores: 10                          # workers p (default: this machine's core count)
 topCount: 15                       # rows shown in load / cost rankings
 
-weights: "weights.yml"             # optional, written by the weights command
+weights: ".module-graph-doctor/weights.yml"        # default, written by the weights command
 
 check:
-  baseline: "graph-baseline.json"
+  baseline: ".module-graph-doctor/graph-baseline.json"   # default
   makespanWarnPercent: 5        # thresholds are relative to the baseline, so
   makespanErrorPercent: 10      # re-measuring weights on a faster machine
   buildCostWarnPercent: 10      # does not de-calibrate the gates (a small

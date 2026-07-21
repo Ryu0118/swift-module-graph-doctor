@@ -27,7 +27,7 @@ struct WeightsCommand: AsyncParsableCommand {
         let data = try Data(contentsOf: URL(filePath: logPath))
         let weights = try WeightsGenerator.generate(fromXCLogParserJSON: data)
 
-        let rawOutput = outputPath ?? configuration.weights ?? "weights.yml"
+        let rawOutput = outputPath ?? configuration.weights ?? ".module-graph-doctor/weights.yml"
         let outputURL = rawOutput.hasPrefix("/")
             ? URL(filePath: rawOutput)
             : baseDirectory.appendingPathComponent(rawOutput)

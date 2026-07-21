@@ -30,7 +30,7 @@ binding constraint:
 - `BALANCED` (the knee) — only changes that lower both bounds still pay off.
   Refuse refactoring proposals that attack just one bound.
 
-**Weights** (`weights.yml`) — measured compile seconds per target, extracted
+**Weights** (`.module-graph-doctor/weights.yml`) — measured compile seconds per target, extracted
 from a real Xcode build log. Optional; without it every target costs `c`.
 
 **Build cost** — `buildCost(T) = sum of w(M) for M in reach(T)`: what building
@@ -53,8 +53,8 @@ report it. To focus on one app: `root: AppFeature` in `module-graph-doctor.yml`.
 ### 2. Set up the regression gate
 
 ```sh
-swift-module-graph-doctor check --update-baseline      # writes graph-baseline.json
-git add graph-baseline.json
+swift-module-graph-doctor check --update-baseline
+git add .module-graph-doctor/graph-baseline.json
 ```
 
 Wire `swift-module-graph-doctor check` into pre-merge checks. Gates are
@@ -75,7 +75,7 @@ xcodebuild -workspace App.xcworkspace -scheme App \
 LOG=$(ls -t /tmp/dd/Logs/Build/*.xcactivitylog | head -1)
 xclogparser parse --file "$LOG" --reporter json --output build.json
 
-swift-module-graph-doctor weights --log build.json     # writes weights.yml
+swift-module-graph-doctor weights --log build.json     # writes .module-graph-doctor/weights.yml
 ```
 
 Traps:
@@ -100,7 +100,7 @@ packagePath: "."            # root package dir (local deps discovered) or dir of
 exclude: [VendoredLib]      # skip wrapper/vendored packages (they inflate the closure)
 costPerTarget: 0.63         # measured c in seconds (default 1.0)
 cores: 10                   # p (default: machine cores)
-weights: weights.yml
+weights: .module-graph-doctor/weights.yml   # default
 check:
   makespanWarnPercent: 5
   makespanErrorPercent: 10

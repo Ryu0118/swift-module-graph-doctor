@@ -48,8 +48,13 @@ package struct GraphBaseline: Codable, Sendable, Equatable {
         try JSONDecoder().decode(Self.self, from: Data(contentsOf: url))
     }
 
-    /// Writes to a JSON file (sorted keys and pretty-printing keep it idempotent)
+    /// Writes to a JSON file (sorted keys and pretty-printing keep it
+    /// idempotent), creating the parent directory if needed
     package func save(to url: URL) throws {
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true,
+        )
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         try encoder.encode(self).write(to: url)

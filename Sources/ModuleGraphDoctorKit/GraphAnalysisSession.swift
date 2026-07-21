@@ -14,7 +14,7 @@ package enum GraphAnalysisSession {
         /// Work-span metrics over the closure
         package let metrics: WorkSpanMetrics
         /// Described packages paired with their directories (for source-level analyses)
-        package let described: [(directory: URL, package: DescribedPackage)]
+        package let described: [LocatedPackage]
         /// Effective per-target cost c (seconds)
         package let costPerTarget: Double
         /// Effective parallelism p
@@ -66,10 +66,11 @@ package enum GraphAnalysisSession {
         // Local manifest dependencies are followed recursively, so path: may
         // point at just the root package(s); exclude also vetoes discovery
         let excluded = Set(configuration.exclude)
-        let described = try await extractor.describePackagesFollowingLocalDependencies(
+        let workspace = try await extractor.extract(
             rootPackages: located,
-        ) { !excluded.contains($0.lastPathComponent) }
-        let graph = GraphAssembler.assemble(packages: described.map(\.package))
+        ) { excluded.contains($0.lastPathComponent) }
+        let graph = workspace.graph
+        let described = workspace.packages
         let rootIDs = try resolveRoots(configuration.root, graph: graph)
         let scope = graph.closure(of: rootIDs)
         let costPerTarget = configuration.costPerTarget ?? 1.0

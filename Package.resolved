@@ -1,5 +1,5 @@
 {
-  "originHash" : "7a633e227b33e0e8643278945573080f780af53ea84fa11e15e09390ac18bd33",
+  "originHash" : "76c5083428b251fe5a24f8dccbe0da005a1925e1d95e9fcd0a1fab9c2125fd8b",
   "pins" : [
     {
       "identity" : "filemanagerprotocol",
@@ -29,6 +29,24 @@
       }
     },
     {
+      "identity" : "swift-docc-plugin",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/swiftlang/swift-docc-plugin",
+      "state" : {
+        "revision" : "647c708be89f834fa6a6d4945442793a77ddf5b6",
+        "version" : "1.5.0"
+      }
+    },
+    {
+      "identity" : "swift-docc-symbolkit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/swiftlang/swift-docc-symbolkit",
+      "state" : {
+        "revision" : "b45d1f2ed151d057b54504d653e0da5552844e34",
+        "version" : "1.0.0"
+      }
+    },
+    {
       "identity" : "swift-log",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-log",
@@ -42,8 +60,8 @@
       "kind" : "remoteSourceControl",
       "location" : "git@github.com:Ryu0118/swift-module-graph.git",
       "state" : {
-        "revision" : "0fb67733b4f946915eb04c7b2c3e7dec61941acb",
-        "version" : "0.4.0"
+        "revision" : "ffb2eb6b64e4b4820e4e50fe3653677cca386cfd",
+        "version" : "0.5.0"
       }
     },
     {

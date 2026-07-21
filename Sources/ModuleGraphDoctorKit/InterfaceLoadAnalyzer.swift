@@ -66,11 +66,13 @@ package enum InterfaceLoadAnalyzer {
     /// Collects per-target sets of interface-visible imported module names from describe results and the file system.
     /// Targets whose sources cannot be read are silently skipped (tolerant of missing generated code, etc.)
     package static func collectInterfaceImports(
-        packages: [(directory: URL, package: DescribedPackage)],
+        packages: [LocatedPackage],
         excludedTargets: Set<TargetID> = [],
     ) -> [TargetID: Set<String>] {
         var results: [TargetID: Set<String>] = [:]
-        for (directory, package) in packages {
+        for located in packages {
+            let directory = located.directory
+            let package = located.package
             for target in package.targets where target.type != "test" {
                 let id = TargetID(packageName: package.name, targetName: target.name)
                 guard !excludedTargets.contains(id), let targetPath = target.path else { continue }

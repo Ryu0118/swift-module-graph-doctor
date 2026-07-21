@@ -3,53 +3,46 @@ import Testing
 
 @Suite
 struct ConfigurationTests {
-    @Test("全項目入りのYAMLをデコードできる")
+    @Test("フラットスキーマの全項目入りYAMLをデコードできる")
     func decodesFullYAML() throws {
         let yaml = """
-        packages:
-          roots: ["Packages"]
-          exclude: ["BinaryWrappers", "VendoredLib"]
-        analysis:
-          roots: ["MainApp/AppFeature"]
-          costPerTarget: 0.629
-          parallelism: 10
-          topLoadCount: 20
+        root: [AppFeature, WidgetExtension]
+        path: "MyPackages"
+        exclude: [BinaryWrappers, VendoredLib]
+        costPerTarget: 0.629
+        cores: 10
+        topCount: 20
         """
 
         let configuration = try Configuration.decode(yaml: yaml)
 
-        #expect(configuration.packages.roots == ["Packages"])
-        #expect(configuration.packages.exclude == ["BinaryWrappers", "VendoredLib"])
-        #expect(configuration.analysis.roots == ["MainApp/AppFeature"])
-        #expect(configuration.analysis.costPerTarget == 0.629)
-        #expect(configuration.analysis.parallelism == 10)
-        #expect(configuration.analysis.topLoadCount == 20)
+        #expect(configuration.root == ["AppFeature", "WidgetExtension"])
+        #expect(configuration.path == ["MyPackages"])
+        #expect(configuration.exclude == ["BinaryWrappers", "VendoredLib"])
+        #expect(configuration.costPerTarget == 0.629)
+        #expect(configuration.cores == 10)
+        #expect(configuration.topCount == 20)
     }
 
-    @Test("オプション項目は省略できる")
-    func optionalFieldsCanBeOmitted() throws {
-        let yaml = """
-        packages:
-          roots: ["."]
-        analysis:
-          roots: ["App/AppFeature"]
-        """
+    @Test("pathとrootは文字列でもリストでも書ける")
+    func pathAndRootAcceptScalarOrList() throws {
+        let scalar = try Configuration.decode(yaml: "root: AppFeature\npath: .")
+        let list = try Configuration.decode(yaml: "root: [AppFeature]\npath: [\".\"]")
 
-        let configuration = try Configuration.decode(yaml: yaml)
-
-        #expect(configuration.packages.exclude == nil)
-        #expect(configuration.analysis.costPerTarget == nil)
-        #expect(configuration.analysis.parallelism == nil)
+        #expect(scalar.root == ["AppFeature"])
+        #expect(scalar.path == ["."])
+        #expect(scalar.root == list.root)
+        #expect(scalar.path == list.path)
     }
 
-    @Test("parseTargetIDはpackage/target形式のみ受け付ける")
-    func parseTargetIDValidatesFormat() {
-        #expect(
-            Configuration.parseTargetID("MainApp/AppFeature")
-                == TargetID(packageName: "MainApp", targetName: "AppFeature"),
-        )
-        #expect(Configuration.parseTargetID("NoSlash") == nil)
-        #expect(Configuration.parseTargetID("/Empty") == nil)
-        #expect(Configuration.parseTargetID("Empty/") == nil)
+    @Test("空のYAMLでも全てデフォルトで成立する（ゼロコンフィグ）")
+    func emptyYAMLFallsBackToDefaults() throws {
+        let configuration = try Configuration.decode(yaml: "{}")
+
+        #expect(configuration.path == ["."])
+        #expect(configuration.root.isEmpty)
+        #expect(configuration.exclude.isEmpty)
+        #expect(configuration.costPerTarget == nil)
+        #expect(configuration.cores == nil)
     }
 }

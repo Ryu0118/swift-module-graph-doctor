@@ -128,8 +128,7 @@ struct TargetWeightsTests {
     @Test("heavyThresholdSecondsで重みが閾値以上のtargetにheavyラベルが付く（明示指定優先）")
     func heavyAutoLabelRespectsExplicitPriority() throws {
         let configuration = Configuration(
-            packages: .init(roots: ["."]),
-            analysis: .init(roots: ["P/App"]),
+            root: ["P/App"],
             labels: .init(
                 explicit: ["AlreadyLabeled": "model"],
                 heavyThresholdSeconds: 100,

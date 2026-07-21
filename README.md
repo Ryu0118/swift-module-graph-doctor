@@ -53,15 +53,10 @@ the graph never quietly degrades again.
 ## Quick Start
 
 ```sh
-# 1. Describe what to analyze
-cat > module-graph-doctor.yml << 'YAML'
-packages:
-  roots: ["Packages"]
-analysis:
-  roots: ["MyApp/AppFeature"]
-YAML
-
-# 2. Diagnose
+# Zero config: run it in your package (or workspace) directory.
+# Packages are discovered automatically and the analysis roots default to
+# every target nothing else depends on (typically your app / executable).
+cd MyWorkspace
 swift-module-graph-doctor diagnose
 ```
 
@@ -96,12 +91,12 @@ rerouting any edge in this chain):
 ```
 
 ```sh
-# 3. Freeze the current state and gate regressions from now on
+# Freeze the current state and gate regressions from now on
 swift-module-graph-doctor check --update-baseline
 git add graph-baseline.json
 
-# 4. Wire `swift-module-graph-doctor check` into your pre-merge checks.
-#    From now on this is what a bad PR sees:
+# Wire `swift-module-graph-doctor check` into your pre-merge checks.
+# From now on this is what a bad PR sees:
 ```
 
 ```text
@@ -188,20 +183,27 @@ costs, `check` gates their regressions, and targets above
 
 ## Configuration
 
-Everything lives in one `module-graph-doctor.yml` next to your workspace:
+No config file is required. When you want to pin things down, put a
+`module-graph-doctor.yml` next to your workspace — the schema is flat and
+every key is optional:
 
 ```yaml
-packages:
-  roots: ["Packages"]              # directories scanned for Package.swift (1 level deep)
-  exclude: ["BinaryWrappers"]      # skip Scipio-style wrapper / vendored packages:
-                                   # they re-export prebuilt SDKs as local products
-                                   # and would silently inflate the closure
+root: AppFeature                   # target(s) to analyze. Bare name is enough;
+                                   # use <package>/<target> only if the name is
+                                   # ambiguous (the error will tell you).
+                                   # Omit to auto-detect: every non-test target
+                                   # nothing else depends on
 
-analysis:
-  roots: ["MyApp/AppFeature"]      # <package>/<target> roots of the closure
-  costPerTarget: 0.63              # measured per-target cost c in seconds (default 1.0)
-  parallelism: 10                  # cores p (default: this machine's core count)
-  topLoadCount: 15                 # rows shown in load / cost rankings
+path: "."                          # a package directory, or a directory whose
+                                   # children are packages -- both work.
+                                   # Single-package repos just use "." (default)
+exclude: [BinaryWrappers]          # package dir names to skip: Scipio-style
+                                   # wrappers / vendored code are never
+                                   # source-built and would inflate the closure
+
+costPerTarget: 0.63                # measured per-target cost c in seconds (default 1.0)
+cores: 10                          # workers p (default: this machine's core count)
+topCount: 15                       # rows shown in load / cost rankings
 
 weights: "weights.yml"             # optional, written by the weights command
 

@@ -83,7 +83,7 @@ package struct CheckRunner: Sendable {
         )
         let current = await snapshot(from: analysis)
         let baseline = GraphBaseline(
-            roots: configuration.analysis.roots,
+            roots: analysis.rootIDs.map(\.description),
             costPerTarget: current.costPerTarget,
             parallelism: current.parallelism,
             targetCount: current.metrics.targetCount,

@@ -22,7 +22,7 @@ struct DiagnoseCommand: AsyncParsableCommand {
 
     func run() async throws {
         let configURL = URL(filePath: configPath)
-        let configuration = try Configuration.load(from: configURL)
+        let configuration = try Configuration.loadOrDefault(from: configURL)
         let baseDirectory = configURL.absoluteURL.deletingLastPathComponent()
 
         let report = try await DiagnoseRunner().run(

@@ -54,15 +54,15 @@ package struct DiagnoseRunner: Sendable {
                 graph: graph,
                 weights: weights,
             )
-            featureCosts = Array(costs.prefix(configuration.analysis.topLoadCount ?? 15))
+            featureCosts = Array(costs.prefix(configuration.topCount ?? 15))
         }
 
         return DiagnoseReport(
-            roots: configuration.analysis.roots,
+            roots: analysis.rootIDs.map(\.description),
             costPerTarget: analysis.costPerTarget,
             parallelism: analysis.parallelism,
             workSpan: metrics,
-            topInterfaceLoads: Array(loads.prefix(configuration.analysis.topLoadCount ?? 15)),
+            topInterfaceLoads: Array(loads.prefix(configuration.topCount ?? 15)),
             topFeatureCosts: featureCosts,
         )
     }

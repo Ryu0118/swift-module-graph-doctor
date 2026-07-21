@@ -7,8 +7,7 @@ struct InvariantCheckerTests {
     @Test("設定のinvariants節がエンジンのルールへ変換される")
     func convertsSpecsToRules() throws {
         let configuration = Configuration(
-            packages: .init(roots: ["."]),
-            analysis: .init(roots: ["P/App"]),
+            root: ["P/App"],
             invariants: [
                 .init(name: "feature-no-live", forbidEdge: .init(from: "feature", to: "live")),
                 .init(name: "interface-no-sdk", forbidReach: .init(from: "interface", to: "sdk")),
@@ -28,13 +27,11 @@ struct InvariantCheckerTests {
     @Test("ルール本体が0個または2個以上のinvariantはエラーになる")
     func ambiguousSpecThrows() {
         let empty = Configuration(
-            packages: .init(roots: ["."]),
-            analysis: .init(roots: ["P/App"]),
+            root: ["P/App"],
             invariants: [.init(name: "broken")],
         )
         let double = Configuration(
-            packages: .init(roots: ["."]),
-            analysis: .init(roots: ["P/App"]),
+            root: ["P/App"],
             invariants: [.init(
                 name: "broken",
                 forbidEdge: .init(from: "a", to: "b"),
@@ -53,10 +50,7 @@ struct InvariantCheckerTests {
     @Test("labels/invariants入りYAMLがデコードできる")
     func decodesLabelsAndInvariantsYAML() throws {
         let yaml = """
-        packages:
-          roots: ["."]
-        analysis:
-          roots: ["MyApp/AppFeature"]
+        root: MyApp/AppFeature
         labels:
           explicit:
             SharedKit: model

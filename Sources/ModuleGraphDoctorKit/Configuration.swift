@@ -3,21 +3,36 @@ import Yams
 
 /// Model of `module-graph-doctor.yml`.
 ///
+/// Every key is optional; the file itself is optional too. The zero-config
+/// behavior scans the current directory and auto-detects roots:
+///
 /// ```yaml
-/// packages:
-///   roots: ["MyPackages"]
-///   exclude: ["BinaryWrappers", "VendoredLib"]
-/// analysis:
-///   roots: ["MyApp/AppFeature"]
-///   costPerTarget: 0.629
-///   parallelism: 10
-///   topLoadCount: 15
+/// root: AppFeature          # target to analyze; omit to auto-detect
+/// path: "."                 # a package dir, or a dir containing packages
+/// exclude: [VendoredLib]    # package dir names to skip
+/// costPerTarget: 0.63       # measured seconds per target (default 1.0)
+/// cores: 10                 # parallel workers (default: machine cores)
+/// weights: weights.yml      # optional measured weights
 /// ```
 package struct Configuration: Decodable, Sendable, Equatable {
-    /// Package scanning settings
-    package let packages: Packages
-    /// Analysis parameters
-    package let analysis: Analysis
+    /// Where to look for packages: a single package directory, or a directory
+    /// whose immediate children are packages. Relative to the config file.
+    /// Defaults to ["."]
+    package let path: [String]
+    /// Package directory names to exclude. Scipio-style binary wrapper packages
+    /// re-export prebuilt SDKs as local products and vendored code is never
+    /// source-built; including either silently inflates the closure
+    package let exclude: [String]
+    /// Targets to analyze. Accepts a bare target name (`AppFeature`) or
+    /// `<package>/<target>` when the name is ambiguous. Empty means auto-detect:
+    /// every non-test target that nothing else depends on
+    package let root: [String]
+    /// Per-target cost in seconds. Defaults to 1.0 (a relative unit)
+    package let costPerTarget: Double?
+    /// Parallel workers (core count). Defaults to the executing machine's cores
+    package let cores: Int?
+    /// Number of rows in the load / cost rankings. Defaults to 15
+    package let topCount: Int?
     /// Baseline gate settings (optional; defaults apply when omitted)
     package let check: Check?
     /// Target labeling settings for architecture invariants (optional)
@@ -27,79 +42,42 @@ package struct Configuration: Decodable, Sendable, Equatable {
     /// Target weights file path (YAML, target name -> seconds). Optional
     package let weights: String?
 
-    /// Package scanning settings
-    package struct Packages: Decodable, Sendable, Equatable {
-        /// Scan roots (relative to the config file, or absolute paths)
-        package let roots: [String]
-        /// Package directory names to exclude (Scipio-style binary wrapper packages
-        /// re-export external SDKs as local products; including them or vendor code
-        /// pollutes the closure with targets that are never source-built, so the
-        /// closure size gets silently inflated by prebuilt wrapper targets)
-        package let exclude: [String]?
-
-        /// Builds directly, for tests
-        package init(roots: [String], exclude: [String]? = nil) {
-            self.roots = roots
-            self.exclude = exclude
-        }
+    enum CodingKeys: String, CodingKey {
+        case path
+        case exclude
+        case root
+        case costPerTarget
+        case cores
+        case topCount
+        case check
+        case labels
+        case invariants
+        case weights
     }
 
-    /// Analysis parameters
-    package struct Analysis: Decodable, Sendable, Equatable {
-        /// Closure roots (`<package>/<target>` form)
-        package let roots: [String]
-        /// Per-target cost in seconds. Defaults to 1.0 (interpreted as a relative value)
-        package let costPerTarget: Double?
-        /// Parallelism (core count). Defaults to the executing machine's core count
-        package let parallelism: Int?
-        /// Number of entries shown in the Load ranking. Defaults to 15
-        package let topLoadCount: Int?
-
-        /// Builds directly, for tests
-        package init(
-            roots: [String],
-            costPerTarget: Double? = nil,
-            parallelism: Int? = nil,
-            topLoadCount: Int? = nil,
-        ) {
-            self.roots = roots
-            self.costPerTarget = costPerTarget
-            self.parallelism = parallelism
-            self.topLoadCount = topLoadCount
-        }
+    /// Decodes the flat schema; `path` and `root` accept a string or a list
+    package init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        path = try Self.stringOrList(container, .path) ?? ["."]
+        exclude = try container.decodeIfPresent([String].self, forKey: .exclude) ?? []
+        root = try Self.stringOrList(container, .root) ?? []
+        costPerTarget = try container.decodeIfPresent(Double.self, forKey: .costPerTarget)
+        cores = try container.decodeIfPresent(Int.self, forKey: .cores)
+        topCount = try container.decodeIfPresent(Int.self, forKey: .topCount)
+        check = try container.decodeIfPresent(Check.self, forKey: .check)
+        labels = try container.decodeIfPresent(Labels.self, forKey: .labels)
+        invariants = try container.decodeIfPresent([InvariantSpec].self, forKey: .invariants)
+        weights = try container.decodeIfPresent(String.self, forKey: .weights)
     }
 
-    /// Baseline gate settings
-    package struct Check: Decodable, Sendable, Equatable {
-        /// Baseline file path (relative to the config file, or absolute). Defaults to graph-baseline.json
-        package let baseline: String?
-        /// Makespan regression (seconds) at or above which check warns. Defaults to 0.5
-        package let makespanWarnSeconds: Double?
-        /// Makespan regression (seconds) at or above which check errors. Defaults to 1.0
-        package let makespanErrorSeconds: Double?
-        /// Violations baseline file path. Defaults to violations-baseline.yml
-        package let violationsBaseline: String?
-        /// FeatureCost regression (seconds) at or above which check warns. Defaults to 10
-        package let featureCostWarnSeconds: Double?
-        /// FeatureCost regression (seconds) at or above which check errors. Defaults to 30
-        package let featureCostErrorSeconds: Double?
-
-        /// Builds directly, for tests
-        package init(
-            baseline: String? = nil,
-            makespanWarnSeconds: Double? = nil,
-            makespanErrorSeconds: Double? = nil,
-            violationsBaseline: String? = nil,
-            featureCostWarnSeconds: Double? = nil,
-            featureCostErrorSeconds: Double? = nil,
-        ) {
-            self.baseline = baseline
-            self.makespanWarnSeconds = makespanWarnSeconds
-            self.makespanErrorSeconds = makespanErrorSeconds
-            self.violationsBaseline = violationsBaseline
-            self.featureCostWarnSeconds = featureCostWarnSeconds
-            self.featureCostErrorSeconds = featureCostErrorSeconds
+    private static func stringOrList(
+        _ container: KeyedDecodingContainer<CodingKeys>,
+        _ key: CodingKeys,
+    ) throws -> [String]? {
+        if let single = try? container.decodeIfPresent(String.self, forKey: key) {
+            return [single]
         }
+        return try container.decodeIfPresent([String].self, forKey: key)
     }
 
     /// Target labeling settings. Resolution order: explicit -> regex rules (declaration order)
@@ -194,17 +172,58 @@ package struct Configuration: Decodable, Sendable, Equatable {
         }
     }
 
-    /// Builds directly, for tests
+    /// Baseline gate settings
+    package struct Check: Decodable, Sendable, Equatable {
+        /// Baseline file path (relative to the config file, or absolute). Defaults to graph-baseline.json
+        package let baseline: String?
+        /// Makespan regression (seconds) at or above which check warns. Defaults to 0.5
+        package let makespanWarnSeconds: Double?
+        /// Makespan regression (seconds) at or above which check errors. Defaults to 1.0
+        package let makespanErrorSeconds: Double?
+        /// Violations baseline file path. Defaults to violations-baseline.yml
+        package let violationsBaseline: String?
+        /// FeatureCost regression (seconds) at or above which check warns. Defaults to 10
+        package let featureCostWarnSeconds: Double?
+        /// FeatureCost regression (seconds) at or above which check errors. Defaults to 30
+        package let featureCostErrorSeconds: Double?
+
+        /// Builds directly, for tests
+        package init(
+            baseline: String? = nil,
+            makespanWarnSeconds: Double? = nil,
+            makespanErrorSeconds: Double? = nil,
+            violationsBaseline: String? = nil,
+            featureCostWarnSeconds: Double? = nil,
+            featureCostErrorSeconds: Double? = nil,
+        ) {
+            self.baseline = baseline
+            self.makespanWarnSeconds = makespanWarnSeconds
+            self.makespanErrorSeconds = makespanErrorSeconds
+            self.violationsBaseline = violationsBaseline
+            self.featureCostWarnSeconds = featureCostWarnSeconds
+            self.featureCostErrorSeconds = featureCostErrorSeconds
+        }
+    }
+
+    /// Builds directly, for tests and for the zero-config default
     package init(
-        packages: Packages,
-        analysis: Analysis,
+        path: [String] = ["."],
+        exclude: [String] = [],
+        root: [String] = [],
+        costPerTarget: Double? = nil,
+        cores: Int? = nil,
+        topCount: Int? = nil,
         check: Check? = nil,
         labels: Labels? = nil,
         invariants: [InvariantSpec]? = nil,
         weights: String? = nil,
     ) {
-        self.packages = packages
-        self.analysis = analysis
+        self.path = path
+        self.exclude = exclude
+        self.root = root
+        self.costPerTarget = costPerTarget
+        self.cores = cores
+        self.topCount = topCount
         self.check = check
         self.labels = labels
         self.invariants = invariants
@@ -220,13 +239,13 @@ package struct Configuration: Decodable, Sendable, Equatable {
     package static func load(from url: URL) throws -> Self {
         try decode(yaml: String(contentsOf: url, encoding: .utf8))
     }
-}
 
-package extension Configuration {
-    /// Parses a `<package>/<target>` string into a `TargetID`. Returns nil for malformed input
-    static func parseTargetID(_ raw: String) -> TargetID? {
-        let parts = raw.split(separator: "/", maxSplits: 1).map(String.init)
-        guard parts.count == 2, !parts[0].isEmpty, !parts[1].isEmpty else { return nil }
-        return TargetID(packageName: parts[0], targetName: parts[1])
+    /// Loads the config file when it exists; otherwise returns the zero-config
+    /// default (scan the current directory, auto-detect roots)
+    package static func loadOrDefault(from url: URL) throws -> Self {
+        guard FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) else {
+            return Configuration()
+        }
+        return try load(from: url)
     }
 }

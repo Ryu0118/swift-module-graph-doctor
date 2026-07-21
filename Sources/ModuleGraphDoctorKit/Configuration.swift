@@ -8,7 +8,7 @@ import Yams
 ///
 /// ```yaml
 /// root: AppFeature          # target to analyze; omit to auto-detect
-/// path: "."                 # a package dir, or a dir containing packages
+/// packagePath: "."          # your root package dir (local deps discovered)
 /// exclude: [VendoredLib]    # package dir names to skip
 /// costPerTarget: 0.63       # measured seconds per target (default 1.0)
 /// cores: 10                 # parallel workers (default: machine cores)
@@ -18,7 +18,7 @@ package struct Configuration: Decodable, Sendable, Equatable {
     /// Where to look for packages: a single package directory, or a directory
     /// whose immediate children are packages. Relative to the config file.
     /// Defaults to ["."]
-    package let path: [String]
+    package let packagePath: [String]
     /// Package directory names to exclude. Scipio-style binary wrapper packages
     /// re-export prebuilt SDKs as local products and vendored code is never
     /// source-built; including either silently inflates the closure
@@ -39,7 +39,7 @@ package struct Configuration: Decodable, Sendable, Equatable {
     package let weights: String?
 
     enum CodingKeys: String, CodingKey {
-        case path
+        case packagePath
         case exclude
         case root
         case costPerTarget
@@ -52,7 +52,7 @@ package struct Configuration: Decodable, Sendable, Equatable {
     /// Decodes the flat schema; `path` and `root` accept a string or a list
     package init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        path = try Self.stringOrList(container, .path) ?? ["."]
+        packagePath = try Self.stringOrList(container, .packagePath) ?? ["."]
         exclude = try container.decodeIfPresent([String].self, forKey: .exclude) ?? []
         root = try Self.stringOrList(container, .root) ?? []
         costPerTarget = try container.decodeIfPresent(Double.self, forKey: .costPerTarget)
@@ -103,7 +103,7 @@ package struct Configuration: Decodable, Sendable, Equatable {
 
     /// Builds directly, for tests and for the zero-config default
     package init(
-        path: [String] = ["."],
+        packagePath: [String] = ["."],
         exclude: [String] = [],
         root: [String] = [],
         costPerTarget: Double? = nil,
@@ -112,7 +112,7 @@ package struct Configuration: Decodable, Sendable, Equatable {
         check: Check? = nil,
         weights: String? = nil,
     ) {
-        self.path = path
+        self.packagePath = packagePath
         self.exclude = exclude
         self.root = root
         self.costPerTarget = costPerTarget

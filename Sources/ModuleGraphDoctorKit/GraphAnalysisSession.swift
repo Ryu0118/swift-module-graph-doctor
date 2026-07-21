@@ -60,7 +60,7 @@ package enum GraphAnalysisSession {
     ) async throws -> Analysis {
         let located = locatePackageDirectories(configuration: configuration, baseDirectory: baseDirectory)
         guard !located.isEmpty else {
-            throw Error.noPackagesFound(configuration.path)
+            throw Error.noPackagesFound(configuration.packagePath)
         }
 
         // Local manifest dependencies are followed recursively, so path: may
@@ -133,7 +133,7 @@ package enum GraphAnalysisSession {
         configuration: Configuration,
         baseDirectory: URL,
     ) -> [URL] {
-        let roots = configuration.path.map { raw in
+        let roots = configuration.packagePath.map { raw in
             raw.hasPrefix("/") ? URL(filePath: raw) : baseDirectory.appendingPathComponent(raw)
         }
         let excluded = Set(configuration.exclude)

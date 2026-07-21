@@ -110,7 +110,7 @@ enum BundledSkill {
 
     ```yaml
     root: AppFeature            # bare name; <package>/<target> if ambiguous; omit = auto
-    path: "."                   # root package dir (local deps discovered) or dir of packages
+    packagePath: "."            # root package dir (local deps discovered) or dir of packages
     exclude: [VendoredLib]      # skip wrapper/vendored packages (they inflate the closure)
     costPerTarget: 0.63         # measured c in seconds (default 1.0)
     cores: 10                   # p (default: machine cores)

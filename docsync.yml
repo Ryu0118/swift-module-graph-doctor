@@ -1,22 +1,90 @@
 rules:
-- name: readme-cli-surface
+- name: readme-diagnose-command
   sources:
   - Sources/ModuleGraphDoctorCLI/DiagnoseCommand.swift
-  - Sources/ModuleGraphDoctorCLI/CheckCommand.swift
-  - Sources/ModuleGraphDoctorCLI/WeightsCommand.swift
-  - Sources/ModuleGraphDoctorCLI/InstallSkillsCommand.swift
-  - Sources/ModuleGraphDoctorKit/Configuration.swift
+  - Sources/ModuleGraphDoctorKit/DiagnoseRunner.swift
+  - Sources/ModuleGraphDoctorKit/DiagnoseReportRenderer.swift
+  - Sources/ModuleGraphDoctorKit/InterfaceLoadAnalyzer.swift
+  - Sources/ModuleGraphDoctorKit/ImportScanner.swift
   doc: README.md
-  message: The CLI surface (subcommands, options, config schema) changed. Update the
-    README sections documenting commands and configuration so the README never drifts
-    from the actual flags and keys.
-  checksum: f0537c7c1bf3db2ea78f378c673d0ef1a29527f830233d1ce6631764376e872b
-- name: readme-analysis-semantics
+  message: diagnose changed (flags, report contents, or --format json output). Update
+    the README diagnose subsection, the Quick Start excerpt, and the JSON key table
+    if the output shape changed.
+  checksum: ce43368eb1c7fc3a4a8328794e25b282f7bf1a65c0df22c83b3b48e9dc2dec0c
+- name: readme-check-command
+  sources:
+  - Sources/ModuleGraphDoctorCLI/CheckCommand.swift
+  - Sources/ModuleGraphDoctorKit/CheckRunner.swift
+  - Sources/ModuleGraphDoctorKit/GraphBaseline.swift
+  doc: README.md
+  message: check changed (flags, what gets compared, or the baseline file shape).
+    Update the README check subsection and Configuration's check baseline key if the
+    default path or behavior changed.
+  checksum: 6d7faa9ec9dce7f39f7c8e42c1483dbca9c1980bc9b44bff62a56fdaddbf0019
+- name: docc-regression-gate
+  sources:
+  - Sources/ModuleGraphDoctorKit/CheckRunner.swift
+  - Sources/ModuleGraphDoctorKit/BaselineGate.swift
+  - Sources/ModuleGraphDoctorKit/GraphBaseline.swift
+  doc: Sources/swift-module-graph-doctor/ModuleGraphDoctor.docc/RegressionGate.md
+  message: The regression gate's logic changed (what is gated, severity tiers, the
+    percent-vs-floor threshold reasoning). RegressionGate.md explains and justifies
+    this in depth -- update the finding table or the percentage/floor reasoning if
+    either no longer matches the code.
+  checksum: 9639c89a3c5c8897e97e5b94e15d92732df7c2465a6f2413ad536942e57e3f3e
+- name: readme-weights-command
+  sources:
+  - Sources/ModuleGraphDoctorCLI/WeightsCommand.swift
+  - Sources/ModuleGraphDoctorKit/WeightsRunner.swift
+  - Sources/ModuleGraphDoctorKit/WeightsGenerator.swift
+  - Sources/ModuleGraphDoctorKit/TargetWeights.swift
+  doc: README.md
+  message: weights changed (flags, the XCLogParser parsing logic, or the output file
+    format/default path). Update the README weights subsection, including the clean-build-log
+    and SLF-log traps if the underlying constraints changed.
+  checksum: 831cebad985d3f2aa7fbe2aedfbf8e6e0db57560c7fbbc71622a49cf9c913be8
+- name: readme-install-skills-command
+  sources:
+  - Sources/ModuleGraphDoctorCLI/InstallSkillsCommand.swift
+  - Sources/ModuleGraphDoctorKit/SkillInstaller.swift
+  doc: README.md
+  message: install-skills changed (flags, client resolution, or install/uninstall
+    behavior). Update the README install-skills subsection and Agent Skill section.
+  checksum: abe0331b11416c59f84a0ef890a79739f04ebe71b2b512e1d91ab0fd9dd83f07
+- name: readme-work-span-model
   sources:
   - Sources/ModuleGraphDoctorKit/WorkSpanAnalyzer.swift
-  - Sources/ModuleGraphDoctorKit/BuildCostAnalyzer.swift
-  - Sources/ModuleGraphDoctorKit/BaselineGate.swift
+  - Sources/ModuleGraphDoctorKit/WorkSpanMetrics.swift
   doc: README.md
-  message: Analysis semantics (work-span model, build cost, baseline gates and their
-    thresholds) changed. Update the corresponding README sections.
-  checksum: 5bf6a29bc33ead5275c985a16b71e2419687b6c337a2556022878edf2ae2f1c0
+  message: The work-span model computation changed (the bounds, the binding-constraint
+    judgment, or the makespan^ simulation). Update the README "The Model" section
+    and its formula/table if the reasoning or thresholds changed.
+  checksum: db00f738b7d0cf42a3e56bcdd8547154b3e887174602de9f710eea6b1cab0d72
+- name: docc-work-span-model
+  sources:
+  - Sources/ModuleGraphDoctorKit/WorkSpanAnalyzer.swift
+  - Sources/ModuleGraphDoctorKit/WorkSpanMetrics.swift
+  doc: Sources/swift-module-graph-doctor/ModuleGraphDoctor.docc/WorkSpanModel.md
+  message: The work-span model computation changed. WorkSpanModel.md derives the Graham
+    bound (makespan >= max(T_inf, T_1/p)) and explains the binding-constraint / makespan^
+    reasoning in depth -- update whichever derivation no longer matches the code.
+  checksum: db00f738b7d0cf42a3e56bcdd8547154b3e887174602de9f710eea6b1cab0d72
+- name: readme-config-schema
+  sources:
+  - Sources/ModuleGraphDoctorKit/Configuration.swift
+  doc: README.md
+  message: 'The YAML config schema changed. Update the README Configuration section
+    (every key, default, and the check: sub-block) so it matches the decoder.'
+  checksum: d181db6c6fb718c781cae64e48765941f873e7120c934d7b5cdbbf02adfd33f9
+- name: package-manifest
+  sources:
+  - Package.swift
+  doc: README.md
+  message: Package.swift changed (dependency versions, products, or swift-tools-version).
+    Update the README Installation section and version badges if they no longer match.
+  checksum: bdb84000f0b87a0c13efd6cf3a7060ff6dfd82e580535ca150fd4abf26d118f7
+excludes:
+- '**/.build/**'
+- '**/.swiftpm/**'
+- .git/**
+- '**/.DS_Store'

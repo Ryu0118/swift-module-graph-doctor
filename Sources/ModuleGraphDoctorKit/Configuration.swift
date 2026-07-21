@@ -20,6 +20,10 @@ package struct Configuration: Decodable, Sendable, Equatable {
     package let analysis: Analysis
     /// Baseline gate settings (optional; defaults apply when omitted)
     package let check: Check?
+    /// Target labeling settings for architecture invariants (optional)
+    package let labels: Labels?
+    /// Architecture invariant rules (optional)
+    package let invariants: [InvariantSpec]?
 
     /// Package scanning settings
     package struct Packages: Decodable, Sendable, Equatable {
@@ -71,24 +75,124 @@ package struct Configuration: Decodable, Sendable, Equatable {
         package let makespanWarnSeconds: Double?
         /// Makespan regression (seconds) at or above which check errors. Defaults to 1.0
         package let makespanErrorSeconds: Double?
+        /// Violations baseline file path. Defaults to violations-baseline.yml
+        package let violationsBaseline: String?
 
         /// Builds directly, for tests
         package init(
             baseline: String? = nil,
             makespanWarnSeconds: Double? = nil,
             makespanErrorSeconds: Double? = nil,
+            violationsBaseline: String? = nil,
         ) {
             self.baseline = baseline
             self.makespanWarnSeconds = makespanWarnSeconds
             self.makespanErrorSeconds = makespanErrorSeconds
+            self.violationsBaseline = violationsBaseline
+        }
+    }
+
+    /// Target labeling settings. Resolution order: explicit -> regex rules (declaration order)
+    package struct Labels: Decodable, Sendable, Equatable {
+        /// Explicit target-name (or `package/target`) to label mapping
+        package let explicit: [String: String]?
+        /// Regex rules matched against the target name, evaluated in order
+        package let rules: [Rule]?
+        /// External product names labeled as SDKs (for `forbid-reach: ... -> sdk`)
+        package let sdk: [String]?
+
+        /// A regex labeling rule
+        package struct Rule: Decodable, Sendable, Equatable {
+            /// Regular expression matched against the target name
+            package let pattern: String
+            /// Label assigned on match
+            package let label: String
+
+            /// Builds directly, for tests
+            package init(pattern: String, label: String) {
+                self.pattern = pattern
+                self.label = label
+            }
+        }
+
+        /// Builds directly, for tests
+        package init(
+            explicit: [String: String]? = nil,
+            rules: [Rule]? = nil,
+            sdk: [String]? = nil,
+        ) {
+            self.explicit = explicit
+            self.rules = rules
+            self.sdk = sdk
+        }
+    }
+
+    /// Declarative invariant rule. Exactly one of the three rule bodies must be present
+    package struct InvariantSpec: Decodable, Sendable, Equatable {
+        /// Rule name used in reports and the violations baseline
+        package let name: String
+        /// Forbids direct edges between two labels
+        package let forbidEdge: LabelPair?
+        /// Forbids transitive reachability between two labels (`to: sdk` also matches externals)
+        package let forbidReach: LabelPair?
+        /// Restricts transitive dependents of a label to an allowlist of labels
+        package let forbidDependents: DependentsSpec?
+
+        /// A (from, to) label pair
+        package struct LabelPair: Decodable, Sendable, Equatable {
+            /// Source label
+            package let from: String
+            /// Destination label
+            package let to: String
+
+            /// Builds directly, for tests
+            package init(from: String, to: String) {
+                self.from = from
+                self.to = to
+            }
+        }
+
+        /// Body of a forbid-dependents rule
+        package struct DependentsSpec: Decodable, Sendable, Equatable {
+            /// Label of the protected (heavy) targets
+            package let of: String
+            /// Labels allowed to depend on them
+            package let except: [String]
+
+            /// Builds directly, for tests
+            package init(of: String, except: [String]) {
+                self.of = of
+                self.except = except
+            }
+        }
+
+        /// Builds directly, for tests
+        package init(
+            name: String,
+            forbidEdge: LabelPair? = nil,
+            forbidReach: LabelPair? = nil,
+            forbidDependents: DependentsSpec? = nil,
+        ) {
+            self.name = name
+            self.forbidEdge = forbidEdge
+            self.forbidReach = forbidReach
+            self.forbidDependents = forbidDependents
         }
     }
 
     /// Builds directly, for tests
-    package init(packages: Packages, analysis: Analysis, check: Check? = nil) {
+    package init(
+        packages: Packages,
+        analysis: Analysis,
+        check: Check? = nil,
+        labels: Labels? = nil,
+        invariants: [InvariantSpec]? = nil,
+    ) {
         self.packages = packages
         self.analysis = analysis
         self.check = check
+        self.labels = labels
+        self.invariants = invariants
     }
 
     /// Decodes from a YAML string

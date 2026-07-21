@@ -40,24 +40,39 @@ package struct CheckRunner: Sendable {
             throw Error.baselineNotFound(baselineURL.path(percentEncoded: false))
         }
         let baseline = try GraphBaseline.load(from: baselineURL)
-        let current = try await snapshot(configuration: configuration, baseDirectory: baseDirectory)
+        let analysis = try await GraphAnalysisSession.analyze(
+            configuration: configuration,
+            baseDirectory: baseDirectory,
+            extractor: extractor,
+        )
+        let current = snapshot(from: analysis)
 
         let thresholds = BaselineGate.Thresholds(
             makespanWarnSeconds: configuration.check?.makespanWarnSeconds ?? 0.5,
             makespanErrorSeconds: configuration.check?.makespanErrorSeconds ?? 1.0,
         )
-        let findings = BaselineGate.evaluate(
+        var findings = BaselineGate.evaluate(
             baseline: baseline,
             current: current.metrics,
             currentEdges: current.edges,
             thresholds: thresholds,
-        ).sorted { ($0.severity, $1.message) > ($1.severity, $0.message) }
-        return Result(findings: findings)
+        )
+        findings += try invariantFindings(
+            configuration: configuration,
+            baseDirectory: baseDirectory,
+            analysis: analysis,
+        )
+        return Result(findings: findings.sorted { ($0.severity, $1.message) > ($1.severity, $0.message) })
     }
 
     /// Rewrites the baseline with the current graph
     package func updateBaseline(configuration: Configuration, baseDirectory: URL) async throws -> URL {
-        let current = try await snapshot(configuration: configuration, baseDirectory: baseDirectory)
+        let analysis = try await GraphAnalysisSession.analyze(
+            configuration: configuration,
+            baseDirectory: baseDirectory,
+            extractor: extractor,
+        )
+        let current = snapshot(from: analysis)
         let baseline = GraphBaseline(
             roots: configuration.analysis.roots,
             costPerTarget: current.costPerTarget,
@@ -72,6 +87,65 @@ package struct CheckRunner: Sendable {
         return url
     }
 
+    /// Rewrites the violations baseline with the currently observed violations
+    package func updateViolationsBaseline(
+        configuration: Configuration,
+        baseDirectory: URL,
+    ) async throws -> URL {
+        let analysis = try await GraphAnalysisSession.analyze(
+            configuration: configuration,
+            baseDirectory: baseDirectory,
+            extractor: extractor,
+        )
+        let violations = try InvariantChecker.evaluate(
+            configuration: configuration,
+            graph: analysis.graph,
+            scope: analysis.scope,
+        )
+        let url = violationsBaselineURL(configuration: configuration, baseDirectory: baseDirectory)
+        try InvariantChecker.ViolationsBaseline.save(Set(violations.map(\.key)), to: url)
+        return url
+    }
+
+    /// Evaluates architecture invariants and filters them through the violations baseline.
+    /// New violations are errors; baseline entries no longer observed are reported as info
+    /// so stale entries get cleaned up.
+    private func invariantFindings(
+        configuration: Configuration,
+        baseDirectory: URL,
+        analysis: GraphAnalysisSession.Analysis,
+    ) throws -> [BaselineGate.Finding] {
+        let violations = try InvariantChecker.evaluate(
+            configuration: configuration,
+            graph: analysis.graph,
+            scope: analysis.scope,
+        )
+        guard !violations.isEmpty || configuration.invariants?.isEmpty == false else { return [] }
+        let baselineURL = violationsBaselineURL(configuration: configuration, baseDirectory: baseDirectory)
+        let known = try InvariantChecker.ViolationsBaseline.load(from: baselineURL)
+
+        var findings: [BaselineGate.Finding] = []
+        for violation in violations where !known.contains(violation.key) {
+            findings.append(BaselineGate.Finding(
+                severity: .error,
+                message: "invariant violation: \(violation.key) (path: \(violation.path.joined(separator: " -> ")))",
+            ))
+        }
+        let observed = Set(violations.map(\.key))
+        for stale in known.subtracting(observed).sorted() {
+            findings.append(BaselineGate.Finding(
+                severity: .info,
+                message: "stale violations-baseline entry (violation no longer observed): \(stale)",
+            ))
+        }
+        return findings
+    }
+
+    private func violationsBaselineURL(configuration: Configuration, baseDirectory: URL) -> URL {
+        let raw = configuration.check?.violationsBaseline ?? "violations-baseline.yml"
+        return raw.hasPrefix("/") ? URL(filePath: raw) : baseDirectory.appendingPathComponent(raw)
+    }
+
     private struct Snapshot {
         let metrics: WorkSpanMetrics
         let edges: [String: [String]]
@@ -79,12 +153,7 @@ package struct CheckRunner: Sendable {
         let parallelism: Int
     }
 
-    private func snapshot(configuration: Configuration, baseDirectory: URL) async throws -> Snapshot {
-        let analysis = try await GraphAnalysisSession.analyze(
-            configuration: configuration,
-            baseDirectory: baseDirectory,
-            extractor: extractor,
-        )
+    private func snapshot(from analysis: GraphAnalysisSession.Analysis) -> Snapshot {
         var edges: [String: [String]] = [:]
         for source in analysis.scope {
             let inScope = analysis.graph.dependencies(of: source).filter(analysis.scope.contains)

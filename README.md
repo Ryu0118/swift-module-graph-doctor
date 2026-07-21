@@ -299,24 +299,6 @@ once the repository is public. The bundle ships a macOS universal binary
 (arm64 + x86_64) only — the tool shells out to `xcrun swift package describe`,
 which does not exist on Linux.
 
-To release: run the `Publish Release` workflow with a semver version. It
-builds the universal binary, bumps the version constant, validates the
-bundle's `info.json` with a strict JSON parser (a trailing comma there
-silently breaks spm-backend installation), then tags and uploads the bundle
-with its SHA-256 checksum.
-
-## Packages
-
-The tool is split across three repositories: swift-module-graph is the
-shared core, and lint / doctor are siblings on top of it
-(graph ← lint, graph ← doctor):
-
-| Repository | Provides |
-|---|---|
-| [swift-module-graph](https://github.com/Ryu0118/swift-module-graph) | `SwiftModuleGraph` — pure graph: extraction (describe + assembly) and the graph model with its queries |
-| [swift-module-graph-lint](https://github.com/Ryu0118/swift-module-graph-lint) | sibling CLI: layer classification, deny DSL, invariant rule engine, violations baseline |
-| swift-module-graph-doctor (this repo) | this CLI: work-span metrics, import scanning, measured build costs, baseline gate, report rendering |
-
 ## Development
 
 ```sh

@@ -45,3 +45,10 @@ Swiftパッケージ群のモジュール依存グラフを静的解析するCLI
 - **swift-subprocessのpin（`exact: "0.2.1"`）はswift-module-graph側にある**。ProcessRunning 0.2.1はSubprocess 0.2.1のAPI前提で、0.3系の`Execution`generic化（破壊的変更）を取り込むとProcessRunning自体がビルド不能になる（2026-07-21に実際に踏んだ）。SwiftPMはどのtargetからも参照されないpackage依存を解決から間引くため、swift-module-graph側では`Subprocess` productをtarget依存に明示してpinを効かせている。ProcessRunningが追随したらpinを外す
 - Scipio系のバイナリラッパーパッケージ（外部SDKをローカルproductとして再輸出するもの）やvendorコードは解析対象から除外する。含めるとprebuilt済み（ソースビルドされない）targetで閉包サイズが黙って水増しされ、ビルド速度解析として誤った数値になる
 - コミットは小さく論理単位で分割する。マージは通常マージ（squash禁止）
+
+## Releasing
+
+Run the `Publish Release` workflow (workflow_dispatch) with a semver version:
+it builds the macOS universal binary, bumps the version constant, validates
+the artifact bundle's info.json with a strict JSON parser, then tags and
+uploads the bundle with its SHA-256 checksum.

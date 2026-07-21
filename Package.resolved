@@ -1,5 +1,5 @@
 {
-  "originHash" : "fac3a9d0658b601881998bda02641f37162a16dbda4bcda83956e8688867e89d",
+  "originHash" : "09571c6544f7ce47d076975e632124af3d4769c0741f3f86db80f514d54e6498",
   "pins" : [
     {
       "identity" : "filemanagerprotocol",
@@ -26,6 +26,24 @@
       "state" : {
         "revision" : "6a52f3251125d74daf04fcbd5e6f08a75d074382",
         "version" : "1.8.2"
+      }
+    },
+    {
+      "identity" : "swift-module-graph-kit",
+      "kind" : "remoteSourceControl",
+      "location" : "git@github.com:Ryu0118/swift-module-graph-kit.git",
+      "state" : {
+        "revision" : "5553b71486916537e743382a05c6d67a621c7a1e",
+        "version" : "0.1.2"
+      }
+    },
+    {
+      "identity" : "swift-module-graph-lint",
+      "kind" : "remoteSourceControl",
+      "location" : "git@github.com:Ryu0118/swift-module-graph-lint.git",
+      "state" : {
+        "revision" : "ece1da9902f180a447e5da92ea107bd4dc79f14f",
+        "version" : "0.1.0"
       }
     },
     {

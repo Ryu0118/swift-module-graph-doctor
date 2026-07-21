@@ -1,5 +1,5 @@
 @testable import ModuleGraphDoctorKit
-@testable import ModuleGraphKit
+import ModuleGraphKit
 import Testing
 
 @Suite
@@ -133,5 +133,43 @@ struct BaselineGateTests {
         )
 
         #expect(findings.map(\.severity) == [.error])
+    }
+
+    @Test("build costのbaseline比較は相対%で悪化だけを段階的に検出する")
+    func buildCostGateEscalatesBySeverity() {
+        let baseline = GraphBaseline(
+            roots: ["P/App"],
+            costPerTarget: 1,
+            parallelism: 10,
+            targetCount: 3,
+            criticalPathLength: 2,
+            simulatedMakespan: 5,
+            edges: [:],
+            buildCosts: ["P/HomeFeature": 100, "P/LeanFeature": 10],
+        )
+        let metrics = WorkSpanMetrics(
+            targetCount: 3,
+            criticalPathLength: 2,
+            criticalPath: [],
+            totalWork: 3,
+            criticalPathBound: 2,
+            parallelBound: 0.3,
+            simulatedMakespan: 5,
+            bindingConstraint: .balanced,
+            widthProfile: [],
+        )
+
+        let findings = BaselineGate.evaluate(
+            baseline: baseline,
+            current: metrics,
+            currentEdges: [:],
+            currentFeatureCosts: ["P/HomeFeature": 145, "P/LeanFeature": 25],
+        )
+
+        // +45% on HomeFeature errors (>= 25%); +150% on LeanFeature but the
+        // +15s delta relative to a 10s baseline also clears the 2s floor -> error;
+        // both are regressions, severities follow the percentages
+        #expect(findings.contains { $0.severity == .error && $0.message.contains("P/HomeFeature") })
+        #expect(findings.contains { $0.severity == .error && $0.message.contains("P/LeanFeature") })
     }
 }

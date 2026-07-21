@@ -1,4 +1,5 @@
 @testable import ModuleGraphDoctorKit
+import ModuleGraphLint
 import Testing
 
 @Suite
@@ -44,5 +45,32 @@ struct ConfigurationTests {
         #expect(configuration.exclude.isEmpty)
         #expect(configuration.costPerTarget == nil)
         #expect(configuration.cores == nil)
+    }
+
+    @Test("layers/lint入りYAMLがデコードできる")
+    func decodesLayersAndLintYAML() throws {
+        let yaml = """
+        root: MyApp/AppFeature
+        layers:
+          feature: "Feature$"
+          app: [AppFeature]
+          sdk: [SomeDatabaseSDK]
+          heavy: 60
+        lint:
+          - deny: feature -> live
+          - deny: "* => heavy"
+            allow: [live, app]
+        check:
+          violationsBaseline: "custom-violations.yml"
+        """
+
+        let configuration = try Configuration.decode(yaml: yaml)
+
+        #expect(configuration.layers?["feature"] == .regex("Feature$"))
+        #expect(configuration.layers?["app"] == .names(["AppFeature"]))
+        #expect(configuration.layers?["heavy"] == .weightAtLeast(60))
+        #expect(configuration.lint?.count == 2)
+        #expect(configuration.lint?[1].allow == ["live", "app"])
+        #expect(configuration.check?.violationsBaseline == "custom-violations.yml")
     }
 }

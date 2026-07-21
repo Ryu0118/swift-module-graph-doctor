@@ -27,6 +27,7 @@ the graph never quietly degrades again.
 - [JSON Output](#json-output)
 - [Agent Skill](#agent-skill)
 - [Installation](#installation)
+- [Packages](#packages)
 - [Development](#development)
 - [License](#license)
 
@@ -340,6 +341,17 @@ builds the universal binary, bumps the version constant, validates the
 bundle's `info.json` with a strict JSON parser (a trailing comma there
 silently breaks spm-backend installation), then tags and uploads the bundle
 with its SHA-256 checksum.
+
+## Packages
+
+The tool is split across three repositories, layered bottom-up
+(kit ← lint ← doctor):
+
+| Repository | Provides |
+|---|---|
+| [swift-module-graph-kit](https://github.com/Ryu0118/swift-module-graph-kit) | `ModuleGraphKit` — graph extraction, work-span analysis, import scanning, measured build costs |
+| [swift-module-graph-lint](https://github.com/Ryu0118/swift-module-graph-lint) | `ModuleGraphLint` — layer classification, deny DSL, invariant rule engine, violations baseline |
+| swift-module-graph-doctor (this repo) | the CLI: configuration, diagnose/check/weights runners, baseline gate, report rendering |
 
 ## Development
 

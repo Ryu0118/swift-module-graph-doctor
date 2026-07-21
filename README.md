@@ -49,6 +49,31 @@ analysis:
 | `workSpan.widthProfile[]` | `{depth, width, targets}` | Width per depth layer (neck detection) |
 | `topInterfaceLoads[]` | `{target, load}` | Largest transitive closures of public imports |
 
+## Installation
+
+Install via [mise](https://mise.jdx.dev/) using the `spm:` backend, which downloads
+the artifact bundle attached to GitHub Releases:
+
+```toml
+[tools]
+"spm:Ryu0118/swift-module-graph-doctor" = { version = "0.1.0", artifactbundle = true }
+```
+
+While this repository is private, the download requires authentication
+(e.g. `GITHUB_TOKEN` with repo read access in the environment). This note will be
+removed once the repository is public.
+
+The bundle ships a macOS universal binary (arm64 + x86_64) only: the tool shells
+out to `xcrun swift package describe`, which does not exist on Linux.
+
+## Releasing
+
+Run the `Publish Release` workflow (workflow_dispatch) with a semver version.
+It builds the universal binary, bumps the version constant, validates the
+artifact bundle's `info.json` with a strict JSON parser (a trailing comma there
+breaks strict manifest parsers and silently blocks installation), then tags and
+uploads the bundle with its SHA-256 checksum.
+
 ## Development
 
 ```sh

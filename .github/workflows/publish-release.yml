@@ -1,0 +1,153 @@
+name: Publish Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g. 0.1.0)'
+        required: true
+        type: string
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  BINARY_NAME: swift-module-graph-doctor
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Validate version format
+        run: |
+          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "error: version must be in semver format (e.g. 0.1.0)" >&2
+            exit 1
+          fi
+        env:
+          VERSION: ${{ inputs.version }}
+
+      - name: Check tag does not already exist
+        run: |
+          if git ls-remote --tags origin | grep -q "refs/tags/$VERSION$"; then
+            echo "error: tag $VERSION already exists" >&2
+            exit 1
+          fi
+        env:
+          VERSION: ${{ inputs.version }}
+
+  build-macos:
+    needs: preflight
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Select Xcode
+        run: sudo xcode-select --switch /Applications/Xcode_26.2.app/Contents/Developer
+
+      # The tool shells out to `xcrun swift package describe`, which only exists
+      # on macOS, so no Linux variant is built (see README).
+      - name: Build Universal Binary
+        run: xcrun swift build -c release --arch arm64 --arch x86_64
+
+      - name: Upload binary for artifact bundle
+        uses: actions/upload-artifact@v6
+        with:
+          name: binary-macos
+          path: .build/apple/Products/Release/${{ env.BINARY_NAME }}
+          if-no-files-found: error
+
+  create-release:
+    needs: build-macos
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Bump version constant
+        run: |
+          sed -i "s/package static let version = \"[^\"]*\"/package static let version = \"$VERSION\"/" \
+            Sources/ModuleGraphDoctorCLI/ModuleGraphDoctorCommand.swift
+          sed -i "s/public static let version = \"[^\"]*\"/public static let version = \"$VERSION\"/" \
+            Sources/ModuleGraphDoctorCLI/ModuleGraphDoctorCommand.swift
+        env:
+          VERSION: ${{ inputs.version }}
+
+      - name: Commit version bump
+        id: push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Sources/ModuleGraphDoctorCLI/ModuleGraphDoctorCommand.swift
+          if git diff --cached --quiet; then
+            echo "version already at $VERSION, skipping commit"
+          else
+            git commit -m "chore: bump version to $VERSION"
+            git push origin main
+          fi
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+        env:
+          VERSION: ${{ inputs.version }}
+
+      - name: Download binary
+        uses: actions/download-artifact@v6
+        with:
+          name: binary-macos
+          path: /tmp/binaries/macos
+
+      - name: Create Artifact Bundle
+        run: |
+          BUNDLE="${BINARY_NAME}.artifactbundle"
+          mkdir -p "$BUNDLE/${BINARY_NAME}-macos/bin"
+          cp /tmp/binaries/macos/"${BINARY_NAME}" "$BUNDLE/${BINARY_NAME}-macos/bin/${BINARY_NAME}"
+          chmod +x "$BUNDLE/${BINARY_NAME}-macos/bin/${BINARY_NAME}"
+
+          cat > "$BUNDLE/info.json" << BUNDLE_JSON
+          {
+            "schemaVersion": "1.0",
+            "artifacts": {
+              "${BINARY_NAME}": {
+                "version": "${VERSION}",
+                "type": "executable",
+                "variants": [
+                  {
+                    "path": "${BINARY_NAME}-macos/bin/${BINARY_NAME}",
+                    "supportedTriples": ["x86_64-apple-macosx", "arm64-apple-macosx"]
+                  }
+                ]
+              }
+            }
+          }
+          BUNDLE_JSON
+
+          # Strict JSON validation: a trailing comma in info.json breaks strict
+          # manifest parsers even when lenient ones accept it, which silently
+          # blocks spm-backend installation downstream.
+          python3 -m json.tool "$BUNDLE/info.json" > /dev/null
+
+          zip -r "${BINARY_NAME}-${VERSION}.artifactbundle.zip" "$BUNDLE"
+          sha256sum "${BINARY_NAME}-${VERSION}.artifactbundle.zip" > "${BINARY_NAME}-${VERSION}.artifactbundle.zip.sha256"
+        env:
+          VERSION: ${{ inputs.version }}
+          BINARY_NAME: ${{ env.BINARY_NAME }}
+
+      - name: Tag and create GitHub Release
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "$VERSION" "$TARGET_SHA"
+          git push origin "$VERSION"
+          gh release create "$VERSION" \
+            "${BINARY_NAME}-${VERSION}.artifactbundle.zip" \
+            "${BINARY_NAME}-${VERSION}.artifactbundle.zip.sha256" \
+            --title "$VERSION" \
+            --generate-notes
+        env:
+          VERSION: ${{ inputs.version }}
+          TARGET_SHA: ${{ steps.push.outputs.sha }}
+          BINARY_NAME: ${{ env.BINARY_NAME }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

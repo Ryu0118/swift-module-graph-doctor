@@ -1,4 +1,5 @@
 import Foundation
+import ModuleGraphKit
 
 /// Shared pipeline used by both `diagnose` and `check`:
 /// locate packages -> describe -> assemble graph -> compute closure and

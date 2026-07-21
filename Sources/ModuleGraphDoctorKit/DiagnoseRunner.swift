@@ -1,4 +1,5 @@
 import Foundation
+import ModuleGraphKit
 
 /// Report produced by a diagnose run
 package struct DiagnoseReport: Sendable, Codable {

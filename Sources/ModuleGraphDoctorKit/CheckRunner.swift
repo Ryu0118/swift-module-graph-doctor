@@ -1,5 +1,7 @@
 import FileManagerProtocol
 import Foundation
+import ModuleGraphKit
+import ModuleGraphLint
 
 /// Runs the baseline comparison gate: graph extraction, metrics computation, baseline loading, and comparison
 package struct CheckRunner: Sendable {
@@ -107,14 +109,15 @@ package struct CheckRunner: Sendable {
             baseDirectory: baseDirectory,
             extractor: extractor,
         )
-        let violations = try await InvariantChecker.evaluate(
-            configuration: configuration,
+        let violations = try await GraphLinter.evaluate(
+            layers: configuration.layers ?? [:],
+            lint: configuration.lint ?? [],
             graph: analysis.graph,
             scope: analysis.scope,
             weights: analysis.weights,
         )
         let url = violationsBaselineURL(configuration: configuration, baseDirectory: baseDirectory)
-        try InvariantChecker.ViolationsBaseline.save(Set(violations.map(\.key)), to: url)
+        try ViolationsBaseline.save(Set(violations.map(\.key)), to: url)
         return url
     }
 
@@ -126,15 +129,16 @@ package struct CheckRunner: Sendable {
         baseDirectory: URL,
         analysis: GraphAnalysisSession.Analysis,
     ) async throws -> [BaselineGate.Finding] {
-        let violations = try await InvariantChecker.evaluate(
-            configuration: configuration,
+        let violations = try await GraphLinter.evaluate(
+            layers: configuration.layers ?? [:],
+            lint: configuration.lint ?? [],
             graph: analysis.graph,
             scope: analysis.scope,
             weights: analysis.weights,
         )
         guard !violations.isEmpty || configuration.lint?.isEmpty == false else { return [] }
         let baselineURL = violationsBaselineURL(configuration: configuration, baseDirectory: baseDirectory)
-        let known = try InvariantChecker.ViolationsBaseline.load(from: baselineURL)
+        let known = try ViolationsBaseline.load(from: baselineURL)
 
         var findings: [BaselineGate.Finding] = []
         for violation in violations where !known.contains(violation.key) {

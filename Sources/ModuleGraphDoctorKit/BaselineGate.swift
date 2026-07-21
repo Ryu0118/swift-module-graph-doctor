@@ -1,3 +1,5 @@
+import ModuleGraphKit
+
 /// Compares the baseline against current values (pure logic).
 ///
 /// The core of the gate is the simulated-makespan regression threshold. Adding

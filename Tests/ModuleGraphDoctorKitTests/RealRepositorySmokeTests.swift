@@ -1,5 +1,6 @@
 import Foundation
 @testable import ModuleGraphDoctorKit
+@testable import ModuleGraphKit
 import Testing
 
 /// Smoke tests against a real repository.

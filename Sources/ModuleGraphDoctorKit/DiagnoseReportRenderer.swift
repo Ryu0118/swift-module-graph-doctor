@@ -1,4 +1,5 @@
 import Foundation
+import ModuleGraphKit
 
 /// Renders a `DiagnoseReport` for humans (text) or machines (JSON).
 ///

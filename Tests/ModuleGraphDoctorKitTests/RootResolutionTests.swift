@@ -1,4 +1,5 @@
 @testable import ModuleGraphDoctorKit
+@testable import ModuleGraphKit
 import Testing
 
 @Suite

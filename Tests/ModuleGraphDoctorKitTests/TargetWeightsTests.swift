@@ -1,5 +1,7 @@
 import Foundation
 @testable import ModuleGraphDoctorKit
+@testable import ModuleGraphKit
+@testable import ModuleGraphLint
 import Testing
 
 @Suite

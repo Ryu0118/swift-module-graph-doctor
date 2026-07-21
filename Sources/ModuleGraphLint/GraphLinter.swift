@@ -1,15 +1,12 @@
-import FileManagerProtocol
 import Foundation
-import Yams
+import ModuleGraphKit
 
-/// Bridges the `layers:` / `lint:` configuration to the rule engine and applies
-/// the violations baseline.
+/// Bridges `layers:` / `lint:` declarations to the rule engine.
 ///
-/// Known violations are committed to `violations-baseline.yml` (boy-scout style):
-/// only violations whose stable keys are absent from the baseline are reported as
-/// errors, so a legacy codebase can adopt the rules incrementally.
-package enum InvariantChecker {
-    /// Errors thrown while interpreting the configuration
+/// Parses the deny DSL into engine rules and evaluates them over a graph
+/// closure, without knowing anything about the configuration file format.
+package enum GraphLinter {
+    /// Errors thrown while interpreting the lint declarations
     package enum Error: Swift.Error, LocalizedError {
         /// The deny DSL string is malformed
         case invalidRule(String)
@@ -33,8 +30,8 @@ package enum InvariantChecker {
     /// - `A -> B`  : forbid direct edges from layer A to layer B
     /// - `A => B`  : forbid transitive reachability from A to B
     /// - `* => B`  : forbid all dependents of B except the `allow:` layers
-    package static func makeRules(configuration: Configuration) throws -> [InvariantRuleEngine.Rule] {
-        try (configuration.lint ?? []).map { rule in
+    package static func makeRules(lint: [LintRule]) throws -> [InvariantRuleEngine.Rule] {
+        try lint.map { rule in
             let name = rule.deny.trimmingCharacters(in: .whitespaces)
             let transitive = name.contains("=>")
             let separator = transitive ? "=>" : "->"
@@ -58,16 +55,17 @@ package enum InvariantChecker {
         }
     }
 
-    /// Evaluates configured lint rules over the closure and returns all violations
+    /// Evaluates the lint rules over the closure and returns all violations
     package static func evaluate(
-        configuration: Configuration,
+        layers: [String: LayerSpec],
+        lint: [LintRule],
         graph: ModuleGraph,
         scope: Set<TargetID>,
         weights: TargetWeights? = nil,
     ) async throws -> [InvariantRuleEngine.Violation] {
-        let rules = try makeRules(configuration: configuration)
+        let rules = try makeRules(lint: lint)
         guard !rules.isEmpty else { return [] }
-        let labeler = try TargetLabeler(layers: configuration.layers ?? [:])
+        let labeler = try TargetLabeler(layers: layers)
         return try await InvariantRuleEngine.evaluate(
             rules: rules,
             graph: graph,
@@ -75,26 +73,5 @@ package enum InvariantChecker {
             labels: labeler.resolveLayers(for: scope, weights: weights),
             externalNames: labeler.externalNames,
         )
-    }
-
-    /// Violations baseline: a sorted list of stable violation keys stored as YAML
-    package enum ViolationsBaseline {
-        /// Loads baselined keys (empty set when the file does not exist)
-        package static func load(
-            from url: URL,
-            fileManager: any FileManagerProtocol = FileManager.default,
-        ) throws -> Set<String> {
-            guard fileManager.fileExists(atPath: url.path(percentEncoded: false)) else {
-                return []
-            }
-            let yaml = try String(contentsOf: url, encoding: .utf8)
-            return try Set(YAMLDecoder().decode([String].self, from: yaml))
-        }
-
-        /// Writes keys sorted so the file is diff-stable and idempotent
-        package static func save(_ keys: Set<String>, to url: URL) throws {
-            let yaml = try YAMLEncoder().encode(keys.sorted())
-            try yaml.write(to: url, atomically: true, encoding: .utf8)
-        }
     }
 }

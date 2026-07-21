@@ -10,6 +10,8 @@ let package = Package(
     products: [
         .executable(name: "swift-module-graph-doctor", targets: ["swift-module-graph-doctor"]),
         .library(name: "ModuleGraphDoctorKit", targets: ["ModuleGraphDoctorKit"]),
+        .library(name: "ModuleGraphKit", targets: ["ModuleGraphKit"]),
+        .library(name: "ModuleGraphLint", targets: ["ModuleGraphLint"]),
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.6.2"),
@@ -35,9 +37,26 @@ let package = Package(
             ],
         ),
         .target(
-            name: "ModuleGraphDoctorKit",
+            name: "ModuleGraphKit",
             dependencies: [
                 .product(name: "ProcessRunning", package: "ProcessRunning"),
+                .product(name: "Yams", package: "Yams"),
+                .product(name: "FileManagerProtocol", package: "FileManagerProtocol"),
+            ],
+        ),
+        .target(
+            name: "ModuleGraphLint",
+            dependencies: [
+                "ModuleGraphKit",
+                .product(name: "Yams", package: "Yams"),
+                .product(name: "FileManagerProtocol", package: "FileManagerProtocol"),
+            ],
+        ),
+        .target(
+            name: "ModuleGraphDoctorKit",
+            dependencies: [
+                "ModuleGraphKit",
+                "ModuleGraphLint",
                 .product(name: "Yams", package: "Yams"),
                 .product(name: "FileManagerProtocol", package: "FileManagerProtocol"),
             ],
@@ -52,6 +71,8 @@ let package = Package(
             name: "ModuleGraphDoctorKitTests",
             dependencies: [
                 "ModuleGraphDoctorKit",
+                "ModuleGraphKit",
+                "ModuleGraphLint",
             ],
         ),
     ],

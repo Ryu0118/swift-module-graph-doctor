@@ -1,4 +1,5 @@
 import Foundation
+import ModuleGraphKit
 
 /// Evaluates architecture invariants as reachability predicates over the labeled DAG.
 ///

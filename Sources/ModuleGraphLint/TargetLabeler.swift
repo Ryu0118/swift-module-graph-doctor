@@ -1,4 +1,5 @@
 import Foundation
+import ModuleGraphKit
 
 /// Resolves layer membership for targets from the `layers:` configuration.
 ///
@@ -34,7 +35,7 @@ package struct TargetLabeler: Sendable {
     }
 
     /// Builds a resolver from `layers:` (layer name -> spec)
-    package init(layers: [String: Configuration.LayerSpec]) throws {
+    package init(layers: [String: LayerSpec]) throws {
         var exact: [String: String] = [:]
         var regexList: [(String, NSRegularExpression)] = []
         var thresholds: [(String, Double)] = []

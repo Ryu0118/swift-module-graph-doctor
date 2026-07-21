@@ -54,6 +54,7 @@ struct WeightsRunnerTests {
             logData: Data(logJSON.utf8),
             outputOverride: "override.yml",
         )
+
         #expect(output.url.lastPathComponent == "override.yml")
     }
 }

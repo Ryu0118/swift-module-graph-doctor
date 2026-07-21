@@ -60,8 +60,8 @@
       "kind" : "remoteSourceControl",
       "location" : "git@github.com:Ryu0118/swift-module-graph.git",
       "state" : {
-        "revision" : "ffb2eb6b64e4b4820e4e50fe3653677cca386cfd",
-        "version" : "0.5.0"
+        "revision" : "991044834a8c58ca61dc22d018ed4d9ad2ca1661",
+        "version" : "0.5.1"
       }
     },
     {

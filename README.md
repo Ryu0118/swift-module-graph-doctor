@@ -197,9 +197,9 @@ root: AppFeature                   # target(s) to analyze. Bare name is enough;
                                    # Omit to auto-detect: every non-test target
                                    # nothing else depends on
 
-path: "."                          # a package directory, or a directory whose
-                                   # children are packages -- both work.
-                                   # Single-package repos just use "." (default)
+path: "."                          # your root package dir: local manifest deps are
+                                   # discovered recursively. A dir of packages and
+                                   # single-package repos ("." default) also work
 exclude: [BinaryWrappers]          # package dir names to skip: Scipio-style
                                    # wrappers / vendored code are never
                                    # source-built and would inflate the closure

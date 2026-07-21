@@ -58,12 +58,17 @@ package enum GraphAnalysisSession {
         baseDirectory: URL,
         extractor: GraphExtractor,
     ) async throws -> Analysis {
-        let directories = locatePackageDirectories(configuration: configuration, baseDirectory: baseDirectory)
-        guard !directories.isEmpty else {
+        let located = locatePackageDirectories(configuration: configuration, baseDirectory: baseDirectory)
+        guard !located.isEmpty else {
             throw Error.noPackagesFound(configuration.path)
         }
 
-        let described = try await extractor.describePackages(packageDirectories: directories)
+        // Local manifest dependencies are followed recursively, so path: may
+        // point at just the root package(s); exclude also vetoes discovery
+        let excluded = Set(configuration.exclude)
+        let described = try await extractor.describePackagesFollowingLocalDependencies(
+            rootPackages: located,
+        ) { !excluded.contains($0.lastPathComponent) }
         let graph = GraphAssembler.assemble(packages: described.map(\.package))
         let rootIDs = try resolveRoots(configuration.root, graph: graph)
         let scope = graph.closure(of: rootIDs)

@@ -2,8 +2,8 @@
 // The skill is embedded as a string because the release artifact bundle ships
 // the bare executable only; an SPM resource bundle would not travel with it.
 // BundledSkillSyncTests fails whenever this constant and the file diverge.
-// The extra blank line before the closing delimiter preserves the file's
-// trailing newline (Swift multiline literals drop the final line break).
+// The blank line before the closing delimiter preserves the file's trailing
+// newline (Swift multiline literals drop the final line break).
 
 /// The bundled agent skill installed by `install-skills`
 enum BundledSkill {
@@ -56,7 +56,7 @@ enum BundledSkill {
     ### 1. First diagnosis (zero config)
 
     ```sh
-    cd <workspace>          # a package dir, or a dir whose children are packages
+    cd <workspace>          # a root package dir (local deps found recursively) or a dir of packages
     swift-module-graph-doctor diagnose
     ```
 
@@ -110,7 +110,7 @@ enum BundledSkill {
 
     ```yaml
     root: AppFeature            # bare name; <package>/<target> if ambiguous; omit = auto
-    path: "."                   # package dir or dir of packages
+    path: "."                   # root package dir (local deps discovered) or dir of packages
     exclude: [VendoredLib]      # skip wrapper/vendored packages (they inflate the closure)
     costPerTarget: 0.63         # measured c in seconds (default 1.0)
     cores: 10                   # p (default: machine cores)

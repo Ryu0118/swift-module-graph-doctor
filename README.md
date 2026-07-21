@@ -43,9 +43,9 @@ the graph never quietly degrades again.
   two-token rule (`deny: feature -> live`, `deny: interface => sdk`); violations
   come with a witness path, and a violations baseline lets legacy codebases
   adopt rules incrementally.
-- ⚖️ **Measured weights** — feed an [XCLogParser](https://github.com/MobileNativeFoundation/XCLogParser)
-  report and every feature gets a real number: how many compile-seconds its
-  closure pulls in.
+- ⚖️ **Measured build costs** — feed an [XCLogParser](https://github.com/MobileNativeFoundation/XCLogParser)
+  report and every target gets a real number: what building it from scratch
+  costs, dependencies included, in compile-seconds.
 - 🧵 **Fast** — package descriptions load in parallel, reachability scans and
   closure costs fan out on the cooperative thread pool; a ~200-target
   workspace checks in a few seconds.
@@ -132,8 +132,9 @@ headroom an ideal scheduler leaves above the max of the two bounds.
 - **Interface load** — the transitive closure over `public import` edges
   (SE-0409 aware). `internal import` cuts these edges; the number shows how
   many modules get re-exposed to every consumer.
-- **Feature cost** — with measured weights, `cost(F) = Σ w(M) for M ∈ reach(F)`:
-  the compile-seconds a feature pulls into its closure.
+- **Build cost** — with measured weights, `buildCost(T) = Σ w(M) for M ∈ reach(T)`:
+  what building any target from scratch costs, dependencies included. This is
+  the number that matters for standalone test-suite builds and dev loops.
 
 ## Commands
 
@@ -160,7 +161,7 @@ What is gated, and at which severity:
 |---|---|
 | simulated makespan regressed | warning at +0.5s, **error at +1.0s** |
 | critical path grew | warning |
-| feature cost regressed | warning at +10s, **error at +30s** |
+| a target's build cost regressed | warning at +10s, **error at +30s** |
 | new lint violation (not in the violations baseline) | **error**, with witness path |
 | violation in baseline no longer observed | info (prune the stale entry) |
 | new / removed edges, target count changes | info |
@@ -177,7 +178,7 @@ swift-module-graph-doctor weights --log build.json
 
 Sums the durations of `Compile *` steps per target (deliberately ignoring the
 "Build target" wall time, which includes waiting on other targets) and writes
-a diff-stable `weights.yml`. With weights present, `diagnose` reports feature
+a diff-stable `weights.yml`. With weights present, `diagnose` reports build
 costs, `check` gates their regressions, and targets above
 `labels.heavyThresholdSeconds` are auto-labeled `heavy` for invariants.
 
@@ -213,7 +214,7 @@ layers:                            # optional, powers the lint rules.
   feature: "Feature$"
   interface: "(Client|UseCase)$"
   sdk: [FirebaseFirestore, GRDB]
-  heavy: 60                        # number = any target measured at >= 60s
+  heavy: 60                        # number = any target whose own compile time is >= 60s
 
 lint:
   - deny: feature -> live          # ->  forbids the direct edge
@@ -226,8 +227,8 @@ check:
   violationsBaseline: "violations-baseline.yml"
   makespanWarnSeconds: 0.5
   makespanErrorSeconds: 1.0
-  featureCostWarnSeconds: 10
-  featureCostErrorSeconds: 30
+  buildCostWarnSeconds: 10
+  buildCostErrorSeconds: 30
 ```
 
 ## Graph Lint
@@ -270,7 +271,7 @@ them down over time.
 | `workSpan.bindingConstraint` | `String` | `critical-path` / `parallelism` / `balanced` |
 | `workSpan.widthProfile[]` | `{depth, width, targets}` | width per depth layer |
 | `topInterfaceLoads[]` | `{target, load}` | public-import closure sizes |
-| `topFeatureCosts[]?` | `{target, cost}` | closure costs (only with weights) |
+| `topBuildCosts[]?` | `{target, cost}` | build costs incl. dependencies (only with weights) |
 
 ## Installation
 

@@ -49,21 +49,21 @@ package enum BaselineGate {
         /// Regression at or above this value errors
         package let makespanErrorSeconds: Double
         /// FeatureCost regression (seconds) at or above this value warns
-        package let featureCostWarnSeconds: Double
+        package let buildCostWarnSeconds: Double
         /// FeatureCost regression (seconds) at or above this value errors
-        package let featureCostErrorSeconds: Double
+        package let buildCostErrorSeconds: Double
 
         /// Creates thresholds (defaults: makespan warn 0.5s / error 1.0s, featureCost warn 10s / error 30s)
         package init(
             makespanWarnSeconds: Double = 0.5,
             makespanErrorSeconds: Double = 1.0,
-            featureCostWarnSeconds: Double = 10,
-            featureCostErrorSeconds: Double = 30,
+            buildCostWarnSeconds: Double = 10,
+            buildCostErrorSeconds: Double = 30,
         ) {
             self.makespanWarnSeconds = makespanWarnSeconds
             self.makespanErrorSeconds = makespanErrorSeconds
-            self.featureCostWarnSeconds = featureCostWarnSeconds
-            self.featureCostErrorSeconds = featureCostErrorSeconds
+            self.buildCostWarnSeconds = buildCostWarnSeconds
+            self.buildCostErrorSeconds = buildCostErrorSeconds
         }
     }
 
@@ -77,8 +77,8 @@ package enum BaselineGate {
     ) -> [Finding] {
         var findings: [Finding] = []
         findings.append(contentsOf: evaluateMakespan(baseline: baseline, current: current, thresholds: thresholds))
-        findings.append(contentsOf: evaluateFeatureCosts(
-            baseline: baseline.featureCosts,
+        findings.append(contentsOf: evaluateBuildCosts(
+            baseline: baseline.buildCosts,
             current: currentFeatureCosts,
             thresholds: thresholds,
         ))
@@ -119,7 +119,7 @@ package enum BaselineGate {
     }
 
     /// Compares per-target closure costs; only regressions at or above the thresholds are reported
-    private static func evaluateFeatureCosts(
+    private static func evaluateBuildCosts(
         baseline: [String: Double]?,
         current: [String: Double]?,
         thresholds: Thresholds,
@@ -129,12 +129,12 @@ package enum BaselineGate {
         for (target, cost) in current.sorted(by: { $0.key < $1.key }) {
             guard let previous = baseline[target] else { continue }
             let delta = cost - previous
-            guard delta >= thresholds.featureCostWarnSeconds else { continue }
-            let message = "feature cost of \(target) changed by "
+            guard delta >= thresholds.buildCostWarnSeconds else { continue }
+            let message = "build cost of \(target) changed by "
                 + String(format: "%+.1f", delta)
                 + "s (\(String(format: "%.1f", previous)) -> \(String(format: "%.1f", cost)))"
             findings.append(Finding(
-                severity: delta >= thresholds.featureCostErrorSeconds ? .error : .warning,
+                severity: delta >= thresholds.buildCostErrorSeconds ? .error : .warning,
                 message: message,
             ))
         }

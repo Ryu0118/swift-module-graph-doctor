@@ -1,9 +1,9 @@
 import Foundation
 
-/// Computes `FeatureCost(F) = sum of w(M) for M in reach(F)`: the total measured
-/// build cost a target pulls into its closure. A heavy external dependency leaking
-/// into a feature closure shows up as a large jump in this number
-package enum FeatureCostAnalyzer {
+/// Computes `buildCost(T) = sum of w(M) for M in reach(T)`: what building target T
+/// from scratch costs, dependencies included, in measured compile seconds.
+/// A heavy dependency leaking into a target's closure shows up as a large jump
+package enum BuildCostAnalyzer {
     /// A target and the total weight of its dependency closure
     package struct CostEntry: Sendable, Codable, Equatable {
         /// Target in `package/target` form
@@ -16,12 +16,6 @@ package enum FeatureCostAnalyzer {
             self.target = target
             self.cost = cost
         }
-    }
-
-    /// Feature-labeled targets in the closure; falls back to the configured
-    /// analysis roots when no labeler produces a `feature` label
-    package static func featureRoots(analysis: GraphAnalysisSession.Analysis) -> [TargetID] {
-        analysis.scope.filter { $0.targetName.hasSuffix("Feature") }.sorted()
     }
 
     /// Computes closure costs for the given roots. Weights are keyed by plain

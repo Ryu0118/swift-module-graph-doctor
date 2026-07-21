@@ -80,7 +80,7 @@ struct TargetWeightsTests {
             "HomeFeature": 5, "SharedKit": 10, "BigExternal": 400, "LeanFeature": 1,
         ])
 
-        let costs = await FeatureCostAnalyzer.costs(of: [feature, lean], graph: graph, weights: weights)
+        let costs = await BuildCostAnalyzer.costs(of: [feature, lean], graph: graph, weights: weights)
 
         // Heavy external leaking into the closure dominates the cost
         #expect(costs == [
@@ -99,7 +99,7 @@ struct TargetWeightsTests {
             criticalPathLength: 2,
             simulatedMakespan: 5,
             edges: [:],
-            featureCosts: ["P/HomeFeature": 100, "P/LeanFeature": 10],
+            buildCosts: ["P/HomeFeature": 100, "P/LeanFeature": 10],
         )
         let metrics = WorkSpanMetrics(
             targetCount: 3,

@@ -131,9 +131,9 @@ package struct Configuration: Decodable, Sendable, Equatable {
         /// Violations baseline file path. Defaults to violations-baseline.yml
         package let violationsBaseline: String?
         /// FeatureCost regression (seconds) at or above which check warns. Defaults to 10
-        package let featureCostWarnSeconds: Double?
+        package let buildCostWarnSeconds: Double?
         /// FeatureCost regression (seconds) at or above which check errors. Defaults to 30
-        package let featureCostErrorSeconds: Double?
+        package let buildCostErrorSeconds: Double?
 
         /// Builds directly, for tests
         package init(
@@ -141,15 +141,15 @@ package struct Configuration: Decodable, Sendable, Equatable {
             makespanWarnSeconds: Double? = nil,
             makespanErrorSeconds: Double? = nil,
             violationsBaseline: String? = nil,
-            featureCostWarnSeconds: Double? = nil,
-            featureCostErrorSeconds: Double? = nil,
+            buildCostWarnSeconds: Double? = nil,
+            buildCostErrorSeconds: Double? = nil,
         ) {
             self.baseline = baseline
             self.makespanWarnSeconds = makespanWarnSeconds
             self.makespanErrorSeconds = makespanErrorSeconds
             self.violationsBaseline = violationsBaseline
-            self.featureCostWarnSeconds = featureCostWarnSeconds
-            self.featureCostErrorSeconds = featureCostErrorSeconds
+            self.buildCostWarnSeconds = buildCostWarnSeconds
+            self.buildCostErrorSeconds = buildCostErrorSeconds
         }
     }
 

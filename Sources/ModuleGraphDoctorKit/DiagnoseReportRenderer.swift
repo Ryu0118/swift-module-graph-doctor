@@ -15,8 +15,8 @@ package enum DiagnoseReportRenderer {
         sections.append(verdict(report.workSpan))
         sections.append(criticalPath(report.workSpan))
         sections.append(widthProfile(report))
-        if let costs = report.topFeatureCosts, !costs.isEmpty {
-            sections.append(featureCosts(costs))
+        if let costs = report.topBuildCosts, !costs.isEmpty {
+            sections.append(buildCosts(costs))
         }
         if !report.topInterfaceLoads.isEmpty {
             sections.append(interfaceLoads(report.topInterfaceLoads))
@@ -136,10 +136,10 @@ package enum DiagnoseReportRenderer {
         return lines.joined(separator: "\n")
     }
 
-    private static func featureCosts(_ costs: [FeatureCostAnalyzer.CostEntry]) -> String {
+    private static func buildCosts(_ costs: [BuildCostAnalyzer.CostEntry]) -> String {
         var lines: [String] = []
-        lines.append("Feature cost (measured compile seconds each feature pulls into its")
-        lines.append("closure; building just this feature's tests costs about this much):")
+        lines.append("Build cost (what building each target from scratch costs, dependencies")
+        lines.append("included, in measured compile seconds -- e.g. its standalone test suite):")
         for entry in costs {
             lines.append(String(format: "  %8.1fs  %@", entry.cost, entry.target))
         }

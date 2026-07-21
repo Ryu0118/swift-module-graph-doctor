@@ -56,14 +56,14 @@ package struct CheckRunner: Sendable {
         let thresholds = BaselineGate.Thresholds(
             makespanWarnSeconds: configuration.check?.makespanWarnSeconds ?? 0.5,
             makespanErrorSeconds: configuration.check?.makespanErrorSeconds ?? 1.0,
-            featureCostWarnSeconds: configuration.check?.featureCostWarnSeconds ?? 10,
-            featureCostErrorSeconds: configuration.check?.featureCostErrorSeconds ?? 30,
+            buildCostWarnSeconds: configuration.check?.buildCostWarnSeconds ?? 10,
+            buildCostErrorSeconds: configuration.check?.buildCostErrorSeconds ?? 30,
         )
         var findings = BaselineGate.evaluate(
             baseline: baseline,
             current: current.metrics,
             currentEdges: current.edges,
-            currentFeatureCosts: current.featureCosts,
+            currentFeatureCosts: current.buildCosts,
             thresholds: thresholds,
         )
         findings += try await invariantFindings(
@@ -90,7 +90,7 @@ package struct CheckRunner: Sendable {
             criticalPathLength: current.metrics.criticalPathLength,
             simulatedMakespan: current.metrics.simulatedMakespan,
             edges: current.edges,
-            featureCosts: current.featureCosts,
+            buildCosts: current.buildCosts,
         )
         let url = baselineURL(configuration: configuration, baseDirectory: baseDirectory)
         try baseline.save(to: url)
@@ -163,7 +163,7 @@ package struct CheckRunner: Sendable {
         let edges: [String: [String]]
         let costPerTarget: Double
         let parallelism: Int
-        let featureCosts: [String: Double]?
+        let buildCosts: [String: Double]?
     }
 
     private func snapshot(from analysis: GraphAnalysisSession.Analysis) async -> Snapshot {
@@ -177,15 +177,18 @@ package struct CheckRunner: Sendable {
             edges: edges,
             costPerTarget: analysis.costPerTarget,
             parallelism: analysis.parallelism,
-            featureCosts: featureCosts(analysis: analysis),
+            buildCosts: buildCosts(analysis: analysis),
         )
     }
 
-    /// FeatureCost snapshot for feature-labeled targets (nil without weights)
-    private func featureCosts(analysis: GraphAnalysisSession.Analysis) async -> [String: Double]? {
+    /// Build-cost snapshot for every target in scope (nil without weights)
+    private func buildCosts(analysis: GraphAnalysisSession.Analysis) async -> [String: Double]? {
         guard let weights = analysis.weights else { return nil }
-        let roots = FeatureCostAnalyzer.featureRoots(analysis: analysis)
-        let entries = await FeatureCostAnalyzer.costs(of: roots, graph: analysis.graph, weights: weights)
+        let entries = await BuildCostAnalyzer.costs(
+            of: analysis.scope.sorted(),
+            graph: analysis.graph,
+            weights: weights,
+        )
         return Dictionary(uniqueKeysWithValues: entries.map { ($0.target, $0.cost) })
     }
 

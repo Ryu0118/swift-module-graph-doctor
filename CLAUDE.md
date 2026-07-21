@@ -10,12 +10,12 @@ Swiftパッケージ群のモジュール依存グラフを静的解析するCLI
 |------|---------|
 | `Sources/swift-module-graph-doctor/` | Entry point only - just calls ModuleGraphDoctorCLI |
 | `Sources/ModuleGraphDoctorCLI/` | CLI command definitions (ArgumentParser). Thin layer, no business logic |
-| `Sources/ModuleGraphDoctorKit/` | CLI-side implementation: configuration, runners, baseline gate, report rendering |
+| `Sources/ModuleGraphDoctorKit/` | CLI-side implementation: configuration, runners, baseline gate, report rendering, and all analyses (work-span, import scan, build costs) |
 | `Tests/ModuleGraphDoctorCLITests/` | CLI module unit tests |
 | `Tests/ModuleGraphDoctorKitTests/` | Kit unit tests |
 
 解析コアは別リポジトリに分離されている（kit ← lint ← doctor の3層。README「Packages」参照）:
-グラフ抽出・work-span解析・build cost計測は [swift-module-graph](https://github.com/Ryu0118/swift-module-graph)（`SwiftModuleGraph`）、layer分類・deny DSL・不変条項エンジン・violations baselineは [swift-module-graph-lint](https://github.com/Ryu0118/swift-module-graph-lint)（`ModuleGraphLint`）。どちらもSSH URL（`git@github.com:...`）+ `from:`指定で依存する（graph 0.2.0 / lint 0.1.1）（privateリポジトリのため）。
+グラフ抽出とグラフモデル（純粋なグラフのみ）は [swift-module-graph](https://github.com/Ryu0118/swift-module-graph)（`SwiftModuleGraph`）、layer分類・deny DSL・不変条項エンジン・violations baselineは [swift-module-graph-lint](https://github.com/Ryu0118/swift-module-graph-lint)（`ModuleGraphLint`）。work-span解析・import scan・build cost計測などdiagnose系の分析はすべて本リポジトリの`ModuleGraphDoctorKit`に置く（graph側には持ち込まない）。どちらもSSH URL（`git@github.com:...`）+ `from:`指定で依存する（graph 0.3.0 / lint 0.2.0）（privateリポジトリのため）。
 
 ## Naming Conventions
 

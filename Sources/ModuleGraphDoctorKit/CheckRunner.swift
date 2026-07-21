@@ -114,7 +114,7 @@ package struct CheckRunner: Sendable {
             lint: configuration.lint ?? [],
             graph: analysis.graph,
             scope: analysis.scope,
-            weights: analysis.weights,
+            weights: analysis.weights?.seconds,
         )
         let url = violationsBaselineURL(configuration: configuration, baseDirectory: baseDirectory)
         try ViolationsBaseline.save(Set(violations.map(\.key)), to: url)
@@ -134,7 +134,7 @@ package struct CheckRunner: Sendable {
             lint: configuration.lint ?? [],
             graph: analysis.graph,
             scope: analysis.scope,
-            weights: analysis.weights,
+            weights: analysis.weights?.seconds,
         )
         guard !violations.isEmpty || configuration.lint?.isEmpty == false else { return [] }
         let baselineURL = violationsBaselineURL(configuration: configuration, baseDirectory: baseDirectory)

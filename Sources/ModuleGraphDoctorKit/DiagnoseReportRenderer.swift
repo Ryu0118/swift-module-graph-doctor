@@ -33,10 +33,21 @@ package enum DiagnoseReportRenderer {
     }
 
     private static func header(_ report: DiagnoseReport) -> String {
-        """
+        var hint = ""
+        if report.rootsAutoDetected, report.roots.count > 1 {
+            hint = """
+
+
+            note: \(report.roots.count) roots were auto-detected (targets nothing else
+            depends on) and the metrics below cover their union. If some of these
+            look like dead or unwired modules, that is a finding in itself; to focus
+            on one app, set `root:` in module-graph-doctor.yml.
+            """
+        }
+        return """
         Module graph diagnosis
         ======================
-        analyzed roots : \(report.roots.joined(separator: ", "))
+        analyzed roots : \(report.roots.joined(separator: ", "))\(hint)
         assumptions    : c = \(seconds(report.costPerTarget)) build cost per target, \
         p = \(report.parallelism) parallel workers
 

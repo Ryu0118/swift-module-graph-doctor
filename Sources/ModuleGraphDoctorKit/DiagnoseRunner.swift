@@ -4,6 +4,8 @@ import Foundation
 package struct DiagnoseReport: Sendable, Codable {
     /// Closure roots (`package/target` form)
     package let roots: [String]
+    /// Whether the roots were auto-detected (no `root:` in the config)
+    package let rootsAutoDetected: Bool
     /// Per-target cost used for the analysis (seconds)
     package let costPerTarget: Double
     /// Parallelism used for the analysis
@@ -59,6 +61,7 @@ package struct DiagnoseRunner: Sendable {
 
         return DiagnoseReport(
             roots: analysis.rootIDs.map(\.description),
+            rootsAutoDetected: configuration.root.isEmpty,
             costPerTarget: analysis.costPerTarget,
             parallelism: analysis.parallelism,
             workSpan: metrics,

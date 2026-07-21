@@ -17,122 +17,71 @@ the graph never quietly degrades again.
 
 - [Features](#features)
 - [Quick Start](#quick-start)
-- [How It Works: the Work-Span Model](#how-it-works-the-work-span-model)
 - [Commands](#commands)
   - [diagnose](#diagnose)
   - [check](#check)
   - [weights](#weights)
+  - [install-skills](#install-skills)
+- [The Model](#the-model)
 - [Configuration](#configuration)
-- [Companion tool: layer rules](#companion-tool-layer-rules)
-- [JSON Output](#json-output)
 - [Agent Skill](#agent-skill)
 - [Installation](#installation)
-- [Packages](#packages)
 - [Development](#development)
 - [License](#license)
 
 ## Features
 
 - 📊 **Formal build-time diagnosis** — computes the Graham bound
-  `makespan >= max(T_inf, T_1/p)` from your real dependency graph and names the
-  binding constraint (depth-bound / width-bound / balanced), so you know
-  *before* refactoring whether it can pay off.
-- 🚧 **Baseline regression gate** — commit the graph baseline; `check`
-  fails the build when the simulated makespan regresses, the critical path
-  grows, or a feature's closure cost jumps, and prints the exact new edges
-  that caused it.
+  `makespan >= max(T_inf, T_1/p)` from your real dependency graph and names
+  the binding constraint, so you know *before* refactoring whether it can
+  pay off.
+- 🚧 **Regression gate** — `check` fails the build when the simulated
+  makespan regresses, the critical path grows, or a target's build cost
+  jumps, and prints the exact new edges that caused it.
 - ⚖️ **Measured build costs** — feed an [XCLogParser](https://github.com/MobileNativeFoundation/XCLogParser)
   report and every target gets a real number: what building it from scratch
   costs, dependencies included, in compile-seconds.
-- 🧵 **Fast** — package descriptions load in parallel, reachability scans and
-  closure costs fan out on the cooperative thread pool; a ~200-target
-  workspace checks in a few seconds.
+- 🧵 **Fast** — package descriptions load in parallel, reachability scans
+  fan out on the cooperative thread pool; a ~200-target workspace checks in
+  a few seconds.
 
 ## Quick Start
 
+Zero config — run it in your package or workspace directory. Packages are
+discovered automatically; the analysis roots default to every target nothing
+else depends on (typically your app):
+
 ```sh
-# Zero config: run it in your package (or workspace) directory.
-# Packages are discovered automatically and the analysis roots default to
-# every target nothing else depends on (typically your app / executable).
-cd MyWorkspace
 swift-module-graph-doctor diagnose
 ```
 
 ```text
-Module graph diagnosis
-======================
-analyzed roots : MyApp/AppFeature
-assumptions    : c = 1.0s build cost per target, p = 10 parallel workers
-
-Model: a build can never finish faster than max(T_inf, T_1/p)
-(work-span model, a.k.a. Graham bound). The two lower bounds are
-explained below; whichever is larger is the real bottleneck.
-
-N             195 targets   size of the dependency closure (everything the roots pull in)
-D             18 targets    longest dependency chain; these can only build one after another
-T_1 = N x c   195.0s        total work if everything built on a single worker
-T_inf = D x c 18.0s         depth bound: even infinite workers cannot beat the serial chain
-T_1/p         19.5s         width bound: 10 workers cannot beat total work / p
-makespan^     21.0s         simulated build time with an ideal scheduler on p workers
+N             195 targets   size of the dependency closure
+D             18 targets    longest dependency chain (builds serially)
+T_inf = D x c 18.0s         depth bound: infinite workers cannot beat the chain
+T_1/p         19.5s         width bound: 10 workers cannot beat total work / 10
+makespan^     21.0s         simulated build time on 10 workers
 
 Verdict: BALANCED -- at the knee (the two bounds are within 10%)
-  Neither flattening the dependency chain alone nor adding workers
-  alone will make this build meaningfully faster: as soon as one bound
-  drops, the other becomes the bottleneck. Only changes that lower
-  both (fewer targets, cheaper per-target cost) still pay off.
-
-Critical path (the D-target serial chain; shorten it by removing or
-rerouting any edge in this chain):
-  MyApp/AppFeature
-    -> MyApp/TaskFeature
-    -> ...
+  Neither flattening the chain alone nor adding workers alone will
+  make this build meaningfully faster.
 ```
+
+That verdict is the point of the tool: it tells you which refactoring can
+possibly pay off before you spend a week on it. Then, to keep the graph from
+quietly degrading, freeze the current state and add `check` to CI:
 
 ```sh
-# Freeze the current state and gate regressions from now on
 swift-module-graph-doctor check --update-baseline
 git add .module-graph-doctor/graph-baseline.json
-
-# Wire `swift-module-graph-doctor check` into your pre-merge checks.
-# From now on this is what a bad PR sees:
 ```
+
+From now on, this is what a bad PR sees (exit code 1):
 
 ```text
 [error] build cost of MyApp/HomeFeature regressed: 96.2s -> 131.0s (+36%)
 [info] new edge: MyApp/HomeFeature -> Core/TimelineClientLive
-(exit code 1)
 ```
-
-## How It Works: the Work-Span Model
-
-Building a multi-package workspace is scheduling a DAG of N tasks on p cores.
-Classic scheduling theory gives two independent lower bounds:
-
-| Bound | Formula | Meaning | To lower it |
-|---|---|---|---|
-| depth bound | `T_inf = D x c` | the longest dependency chain must build serially | flatten the graph |
-| width bound | `T_1/p = N x c / p` | p workers can never beat total work / p | fewer targets, cheaper targets, more cores |
-
-`makespan >= max(T_inf, T_1/p)` — and the tool's job is to tell you **which
-bound binds**. This matters because refactorings only pay off when they attack
-the binding constraint: shortening an 18-deep chain does nothing while the
-width bound dominates, and buying a bigger machine does nothing while the
-depth bound dominates. When the two are within 10% of each other you are *at
-the knee*: only changes that lower both still help. The `makespan^` figure is
-a critical-path-first list-scheduling simulation, so you can also see how much
-headroom an ideal scheduler leaves above the max of the two bounds.
-
-`diagnose` additionally reports:
-
-- **Width profile** — how many targets exist per dependency depth. Layers
-  narrower than p are "necks" where workers sit idle; re-export facades
-  typically show up here as suspicious width-1..4 serial runs.
-- **Interface load** — the transitive closure over `public import` edges
-  (SE-0409 aware). `internal import` cuts these edges; the number shows how
-  many modules get re-exposed to every consumer.
-- **Build cost** — with measured weights, `buildCost(T) = Σ w(M) for M ∈ reach(T)`:
-  what building any target from scratch costs, dependencies included. This is
-  the number that matters for standalone test-suite builds and dev loops.
 
 ## Commands
 
@@ -142,17 +91,34 @@ headroom an ideal scheduler leaves above the max of the two bounds.
 swift-module-graph-doctor diagnose [--config module-graph-doctor.yml] [--format text|json]
 ```
 
-Prints the full report above. `--format json` emits a machine-readable version
-(schema below) for dashboards or custom gating.
+Measurement, no pass/fail. Prints the work-span report (see
+[The Model](#the-model)) plus:
+
+- **Width profile** — targets per dependency depth; layers narrower than
+  your core count are "necks" where workers sit idle.
+- **Interface load** — the transitive closure over `public import` edges
+  (SE-0409 aware): how many modules each module re-exposes to every consumer.
+- **Build cost** — with measured weights,
+  `buildCost(T) = sum of w(M) for M in reach(T)`: what building any target
+  from scratch costs, dependencies included. This is the number that matters
+  for standalone test-suite builds and dev loops.
+
+`--format json` emits the same report machine-readable (keys mirror the text
+report: `workSpan.targetCount`, `workSpan.simulatedMakespan`,
+`workSpan.bindingConstraint`, `topInterfaceLoads`, `topBuildCosts`, ...) for
+dashboards or custom gating.
 
 ### check
 
 ```sh
-swift-module-graph-doctor check [--config ...]        # gate against baselines (exit 1 on error)
+swift-module-graph-doctor check [--config ...]        # exit 1 on regression
 swift-module-graph-doctor check --update-baseline     # (re)freeze the baseline
 ```
 
-What is gated, and at which severity:
+Compares the current graph against the committed baseline
+(`.module-graph-doctor/graph-baseline.json` by default) — the same idea as a
+snapshot test for your module graph. Intentional changes are reviewed as the
+baseline diff.
 
 | Finding | Default severity |
 |---|---|
@@ -161,8 +127,8 @@ What is gated, and at which severity:
 | a target's build cost regressed | warning at +10%, **error at +25%** |
 | new / removed edges, target count changes | info |
 
-Intentional changes are made visible in review as a diff of the committed
-baseline files — the same idea as a snapshot test for your module graph.
+Thresholds are **relative to the baseline**, so re-measuring weights on a
+faster machine does not de-calibrate the gates.
 
 ### weights
 
@@ -175,20 +141,47 @@ xclogparser parse --file "$(ls -t /tmp/dd/Logs/Build/*.xcactivitylog | head -1)"
 swift-module-graph-doctor weights --log build.json
 ```
 
-Use a **clean-build** log (incremental logs only contain the recompiled
-targets; everything else silently weighs 0), and if the newest log fails with
-`not a valid SLF log` it came from an interrupted build -- use the previous one.
+Turns a real build log into per-target compile-second weights
+(`.module-graph-doctor/weights.yml`). With weights present, `diagnose`
+reports build costs and `check` gates their regressions.
 
-Sums the durations of `Compile *` steps per target (deliberately ignoring the
-"Build target" wall time, which includes waiting on other targets) and writes
-a diff-stable weights file. With weights present, `diagnose` reports build
-costs and `check` gates their regressions.
+Two traps:
+
+- Use a **clean-build** log — incremental logs only contain the recompiled
+  targets; everything else silently weighs 0.
+- `not a valid SLF log` means the newest log came from an interrupted
+  build — use the previous one.
+
+### install-skills
+
+```sh
+swift-module-graph-doctor install-skills    # install the agent skill (see Agent Skill)
+```
+
+## The Model
+
+Building a multi-package workspace is scheduling a DAG of N tasks on p
+cores. Classic scheduling theory gives two independent lower bounds, and
+`makespan >= max(T_inf, T_1/p)`:
+
+| Bound | Formula | Meaning | To lower it |
+|---|---|---|---|
+| depth bound | `T_inf = D x c` | the longest dependency chain must build serially | flatten the graph |
+| width bound | `T_1/p = N x c / p` | p workers can never beat total work / p | fewer targets, cheaper targets, more cores |
+
+The tool's job is to tell you **which bound binds**, because refactorings
+only pay off when they attack the binding constraint: shortening an 18-deep
+chain does nothing while the width bound dominates, and buying a bigger
+machine does nothing while the depth bound dominates. When the two are
+within 10% of each other you are *at the knee* — only changes that lower
+both (fewer targets, cheaper per-target cost) still help. `makespan^` is a
+critical-path-first list-scheduling simulation on top, showing how much
+headroom an ideal scheduler leaves above the max of the two bounds.
 
 ## Configuration
 
 No config file is required. When you want to pin things down, put a
-`module-graph-doctor.yml` next to your workspace — the schema is flat and
-every key is optional:
+`module-graph-doctor.yml` next to your workspace — every key is optional:
 
 ```yaml
 root: AppFeature                   # target(s) to analyze. Bare name is enough;
@@ -200,51 +193,27 @@ root: AppFeature                   # target(s) to analyze. Bare name is enough;
 packagePath: "."                   # your root package dir: local manifest deps are
                                    # discovered recursively. A dir of packages and
                                    # single-package repos ("." default) also work
-exclude: [BinaryWrappers]          # package dir names to skip: Scipio-style
-                                   # wrappers / vendored code are never
-                                   # source-built and would inflate the closure
+exclude: [BinaryWrappers]          # package dir names to skip: binary wrapper /
+                                   # vendored packages are never source-built and
+                                   # would inflate the closure
 
 costPerTarget: 0.63                # measured per-target cost c in seconds (default 1.0)
 cores: 10                          # workers p (default: this machine's core count)
 topCount: 15                       # rows shown in load / cost rankings
 
-weights: ".module-graph-doctor/weights.yml"        # default, written by the weights command
-
+weights: ".module-graph-doctor/weights.yml"              # default
 check:
   baseline: ".module-graph-doctor/graph-baseline.json"   # default
-  makespanWarnPercent: 5        # thresholds are relative to the baseline, so
-  makespanErrorPercent: 10      # re-measuring weights on a faster machine
-  buildCostWarnPercent: 10      # does not de-calibrate the gates (a small
-  buildCostErrorPercent: 25     # absolute noise floor filters tiny baselines)
+  makespanWarnPercent: 5
+  makespanErrorPercent: 10
+  buildCostWarnPercent: 10
+  buildCostErrorPercent: 25
 ```
 
-## Companion tool: layer rules
-
-Layer classification and deny rules (`feature -> live`, `interface => sdk`,
-witness paths, violations baseline) live in the sibling tool
-[swift-module-graph-lint](https://github.com/Ryu0118/swift-module-graph-lint).
-Both tools read the same kind of workspace and share the graph core; run them
-side by side in CI (doctor gates measurements, lint gates layer boundaries).
-
-## JSON Output
-
-`diagnose --format json` keys:
-
-| Key | Type | Meaning |
-|---|---|---|
-| `roots` | `[String]` | closure roots (`package/target`) |
-| `costPerTarget`, `parallelism` | `Double`, `Int` | c and p used for the analysis |
-| `workSpan.targetCount` | `Int` | N |
-| `workSpan.criticalPathLength` | `Int` | D |
-| `workSpan.criticalPath` | `[String]` | the chain, root first |
-| `workSpan.totalWork` | `Double` | T_1 = N x c (seconds) |
-| `workSpan.criticalPathBound` | `Double` | T_inf = D x c (seconds) |
-| `workSpan.parallelBound` | `Double` | T_1/p (seconds) |
-| `workSpan.simulatedMakespan` | `Double` | list-scheduling simulation (seconds) |
-| `workSpan.bindingConstraint` | `String` | `critical-path` / `parallelism` / `balanced` |
-| `workSpan.widthProfile[]` | `{depth, width, targets}` | width per depth layer |
-| `topInterfaceLoads[]` | `{target, load}` | public-import closure sizes |
-| `topBuildCosts[]?` | `{target, cost}` | build costs incl. dependencies (only with weights) |
+Layer classification and deny rules (`feature -> live`, `interface => sdk`)
+are the sibling tool
+[swift-module-graph-lint](https://github.com/Ryu0118/swift-module-graph-lint):
+doctor gates measurements, lint gates layer boundaries. Run both in CI.
 
 ## Agent Skill
 

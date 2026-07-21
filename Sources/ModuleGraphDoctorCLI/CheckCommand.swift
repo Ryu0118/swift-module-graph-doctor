@@ -26,17 +26,21 @@ struct CheckCommand: AsyncParsableCommand {
                 configuration: configuration,
                 baseDirectory: baseDirectory,
             )
-            print("baseline updated: \(url.path(percentEncoded: false))")
+            Log.logger.info("baseline updated: \(url.path(percentEncoded: false))")
             return
         }
 
         let result = try await runner.run(configuration: configuration, baseDirectory: baseDirectory)
         if result.findings.isEmpty {
-            print("module graph check passed: no changes against baseline")
+            Log.logger.info("module graph check passed: no changes against baseline")
             return
         }
         for finding in result.findings {
-            print("[\(finding.severity.rawValue)] \(finding.message)")
+            switch finding.severity {
+            case .error: Log.logger.error("\(finding.message)")
+            case .warning: Log.logger.warning("\(finding.message)")
+            case .info: Log.logger.info("\(finding.message)")
+            }
         }
         if result.hasError {
             throw ExitCode(1)

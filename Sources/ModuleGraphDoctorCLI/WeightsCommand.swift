@@ -1,9 +1,9 @@
 import ArgumentParser
 import Foundation
 import ModuleGraphDoctorKit
-import SwiftModuleGraph
 
-/// Generates the target weights file from an XCLogParser JSON build report
+/// Generates the target weights file from an XCLogParser JSON build report.
+/// Thin argument mapper over `WeightsRunner`
 struct WeightsCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "weights",
@@ -22,16 +22,14 @@ struct WeightsCommand: AsyncParsableCommand {
     func run() async throws {
         let configURL = URL(filePath: configPath)
         let configuration = try Configuration.loadOrDefault(from: configURL)
-        let baseDirectory = configURL.absoluteURL.deletingLastPathComponent()
-
-        let data = try Data(contentsOf: URL(filePath: logPath))
-        let weights = try WeightsGenerator.generate(fromXCLogParserJSON: data)
-
-        let rawOutput = outputPath ?? configuration.weights ?? ".module-graph-doctor/weights.yml"
-        let outputURL = rawOutput.hasPrefix("/")
-            ? URL(filePath: rawOutput)
-            : baseDirectory.appendingPathComponent(rawOutput)
-        try weights.save(to: outputURL)
-        print("weights written: \(outputURL.path(percentEncoded: false)) (\(weights.seconds.count) targets)")
+        let output = try WeightsRunner().run(
+            configuration: configuration,
+            baseDirectory: configURL.absoluteURL.deletingLastPathComponent(),
+            logData: Data(contentsOf: URL(filePath: logPath)),
+            outputOverride: outputPath,
+        )
+        Log.logger.info(
+            "weights written: \(output.url.path(percentEncoded: false)) (\(output.targetCount) targets)",
+        )
     }
 }

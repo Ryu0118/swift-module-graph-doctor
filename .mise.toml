@@ -15,11 +15,12 @@ description = "SwiftFormatでフォーマット"
 run = "swiftformat --config .swiftformat ."
 
 [tasks.lint]
-description = "format差分 + SwiftLint --strict + AST lint"
+description = "Format diff + SwiftLint --strict + AST lint + docsync"
 run = [
     "swiftformat --lint --config .swiftformat .",
     "swiftlint lint --config .swiftlint.yml --strict --no-cache",
     "my-swift-linter --config .swift-ast-lint.yml --no-cache Sources Tests Package.swift",
+    "docsync check",
 ]
 
 [tasks.test]

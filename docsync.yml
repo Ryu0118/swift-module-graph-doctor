@@ -1,17 +1,22 @@
 rules:
-- name: claude-md-project
+- name: readme-cli-surface
   sources:
-  - Package.swift
-  - .mise.toml
-  - Sources/ModuleGraphDoctorCLI/**/*.swift
-  doc: CLAUDE.md
-  message: Package structure, mise tasks, or CLI command surface changed - update
-    CLAUDE.md if directory structure, commands, or conventions changed.
-  checksum: d6c591697e1989cdfde4972b48126eee33dbc4e5f8b73685cc9b915b15713975
-- name: readme-usage
-  sources:
-  - Sources/ModuleGraphDoctorCLI/**/*.swift
+  - Sources/ModuleGraphDoctorCLI/DiagnoseCommand.swift
+  - Sources/ModuleGraphDoctorCLI/CheckCommand.swift
+  - Sources/ModuleGraphDoctorCLI/WeightsCommand.swift
+  - Sources/ModuleGraphDoctorCLI/InstallSkillsCommand.swift
+  - Sources/ModuleGraphDoctorKit/Configuration.swift
   doc: README.md
-  message: CLI command surface changed - update README usage if commands or options
-    changed.
-  checksum: 26be312d7d4cfbb3fd8cf45219e7612da9a05a24d0620b58545d24a29cfeae9b
+  message: The CLI surface (subcommands, options, config schema) changed. Update the
+    README sections documenting commands and configuration so the README never drifts
+    from the actual flags and keys.
+  checksum: 6b6fa7e85c250c448f1c655c24408dd64d2edf1b2f54d1923adbb1c9a9c5bba7
+- name: readme-analysis-semantics
+  sources:
+  - Sources/ModuleGraphDoctorKit/WorkSpanAnalyzer.swift
+  - Sources/ModuleGraphDoctorKit/BuildCostAnalyzer.swift
+  - Sources/ModuleGraphDoctorKit/BaselineGate.swift
+  doc: README.md
+  message: Analysis semantics (work-span model, build cost, baseline gates and their
+    thresholds) changed. Update the corresponding README sections.
+  checksum: 5bf6a29bc33ead5275c985a16b71e2419687b6c337a2556022878edf2ae2f1c0

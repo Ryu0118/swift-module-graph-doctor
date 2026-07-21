@@ -18,6 +18,8 @@ package enum GraphAnalysisSession {
         package let costPerTarget: Double
         /// Effective parallelism p
         package let parallelism: Int
+        /// Measured target weights (nil when not configured or the file is absent)
+        package let weights: TargetWeights?
     }
 
     /// Errors shared by the pipeline
@@ -71,7 +73,15 @@ package enum GraphAnalysisSession {
             described: described,
             costPerTarget: costPerTarget,
             parallelism: parallelism,
+            weights: loadWeights(configuration: configuration, baseDirectory: baseDirectory),
         )
+    }
+
+    /// Loads the configured weights file; absent configuration or file yields nil
+    package static func loadWeights(configuration: Configuration, baseDirectory: URL) -> TargetWeights? {
+        guard let raw = configuration.weights else { return nil }
+        let url = raw.hasPrefix("/") ? URL(filePath: raw) : baseDirectory.appendingPathComponent(raw)
+        return try? TargetWeights.load(from: url)
     }
 
     private static func locatePackageDirectories(

@@ -13,7 +13,7 @@ public struct ModuleGraphDoctorCommand: AsyncParsableCommand {
         and gates regressions against a committed baseline.
         """,
         version: Self.version,
-        subcommands: [DiagnoseCommand.self, CheckCommand.self],
+        subcommands: [DiagnoseCommand.self, CheckCommand.self, WeightsCommand.self],
     )
 
     /// Tool version. Keep in sync with the release tag

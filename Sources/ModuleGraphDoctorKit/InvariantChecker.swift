@@ -1,3 +1,4 @@
+import FileManagerProtocol
 import Foundation
 import Yams
 
@@ -21,11 +22,24 @@ package enum InvariantChecker {
         }
     }
 
-    /// Builds the labeler from the configuration (empty labeler when unconfigured)
-    package static func makeLabeler(configuration: Configuration) throws -> TargetLabeler {
+    /// Builds the labeler from the configuration (empty labeler when unconfigured).
+    /// When `labels.heavyThresholdSeconds` is set and weights are available, targets
+    /// at or above the threshold are auto-labeled `heavy` (user explicit labels win)
+    package static func makeLabeler(
+        configuration: Configuration,
+        weights: TargetWeights? = nil,
+    ) throws -> TargetLabeler {
         let labels = configuration.labels
+        var explicit = labels?.explicit ?? [:]
+        if let threshold = labels?.heavyThresholdSeconds, let weights {
+            for (name, value) in weights.seconds where value >= threshold {
+                if explicit[name] == nil {
+                    explicit[name] = "heavy"
+                }
+            }
+        }
         return try TargetLabeler(
-            explicit: labels?.explicit ?? [:],
+            explicit: explicit,
             regexRules: (labels?.rules ?? []).map {
                 TargetLabeler.RegexRule(pattern: $0.pattern, label: $0.label)
             },
@@ -62,22 +76,26 @@ package enum InvariantChecker {
         configuration: Configuration,
         graph: ModuleGraph,
         scope: Set<TargetID>,
-    ) throws -> [InvariantRuleEngine.Violation] {
+        weights: TargetWeights? = nil,
+    ) async throws -> [InvariantRuleEngine.Violation] {
         let rules = try makeRules(configuration: configuration)
         guard !rules.isEmpty else { return [] }
-        return try InvariantRuleEngine.evaluate(
+        return try await InvariantRuleEngine.evaluate(
             rules: rules,
             graph: graph,
             scope: scope,
-            labeler: makeLabeler(configuration: configuration),
+            labeler: makeLabeler(configuration: configuration, weights: weights),
         )
     }
 
     /// Violations baseline: a sorted list of stable violation keys stored as YAML
     package enum ViolationsBaseline {
         /// Loads baselined keys (empty set when the file does not exist)
-        package static func load(from url: URL) throws -> Set<String> {
-            guard FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) else {
+        package static func load(
+            from url: URL,
+            fileManager: any FileManagerProtocol = FileManager.default,
+        ) throws -> Set<String> {
+            guard fileManager.fileExists(atPath: url.path(percentEncoded: false)) else {
                 return []
             }
             let yaml = try String(contentsOf: url, encoding: .utf8)

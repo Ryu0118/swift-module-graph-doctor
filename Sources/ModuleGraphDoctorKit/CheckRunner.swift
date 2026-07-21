@@ -1,12 +1,18 @@
+import FileManagerProtocol
 import Foundation
 
 /// Runs the baseline comparison gate: graph extraction, metrics computation, baseline loading, and comparison
 package struct CheckRunner: Sendable {
     private let extractor: GraphExtractor
+    private let fileManager: any FileManagerProtocol
 
-    /// Creates an instance with an injected extractor (defaults to real process execution)
-    package init(extractor: GraphExtractor = GraphExtractor()) {
+    /// Creates an instance with injected extractor and file manager (defaults to real implementations)
+    package init(
+        extractor: GraphExtractor = GraphExtractor(),
+        fileManager: any FileManagerProtocol = FileManager.default,
+    ) {
         self.extractor = extractor
+        self.fileManager = fileManager
     }
 
     /// Result of a check run
@@ -36,7 +42,7 @@ package struct CheckRunner: Sendable {
     /// Compares against the baseline
     package func run(configuration: Configuration, baseDirectory: URL) async throws -> Result {
         let baselineURL = baselineURL(configuration: configuration, baseDirectory: baseDirectory)
-        guard FileManager.default.fileExists(atPath: baselineURL.path(percentEncoded: false)) else {
+        guard fileManager.fileExists(atPath: baselineURL.path(percentEncoded: false)) else {
             throw Error.baselineNotFound(baselineURL.path(percentEncoded: false))
         }
         let baseline = try GraphBaseline.load(from: baselineURL)
@@ -45,19 +51,22 @@ package struct CheckRunner: Sendable {
             baseDirectory: baseDirectory,
             extractor: extractor,
         )
-        let current = snapshot(from: analysis)
+        let current = await snapshot(from: analysis)
 
         let thresholds = BaselineGate.Thresholds(
             makespanWarnSeconds: configuration.check?.makespanWarnSeconds ?? 0.5,
             makespanErrorSeconds: configuration.check?.makespanErrorSeconds ?? 1.0,
+            featureCostWarnSeconds: configuration.check?.featureCostWarnSeconds ?? 10,
+            featureCostErrorSeconds: configuration.check?.featureCostErrorSeconds ?? 30,
         )
         var findings = BaselineGate.evaluate(
             baseline: baseline,
             current: current.metrics,
             currentEdges: current.edges,
+            currentFeatureCosts: current.featureCosts,
             thresholds: thresholds,
         )
-        findings += try invariantFindings(
+        findings += try await invariantFindings(
             configuration: configuration,
             baseDirectory: baseDirectory,
             analysis: analysis,
@@ -72,7 +81,7 @@ package struct CheckRunner: Sendable {
             baseDirectory: baseDirectory,
             extractor: extractor,
         )
-        let current = snapshot(from: analysis)
+        let current = await snapshot(from: analysis)
         let baseline = GraphBaseline(
             roots: configuration.analysis.roots,
             costPerTarget: current.costPerTarget,
@@ -81,6 +90,7 @@ package struct CheckRunner: Sendable {
             criticalPathLength: current.metrics.criticalPathLength,
             simulatedMakespan: current.metrics.simulatedMakespan,
             edges: current.edges,
+            featureCosts: current.featureCosts,
         )
         let url = baselineURL(configuration: configuration, baseDirectory: baseDirectory)
         try baseline.save(to: url)
@@ -97,10 +107,11 @@ package struct CheckRunner: Sendable {
             baseDirectory: baseDirectory,
             extractor: extractor,
         )
-        let violations = try InvariantChecker.evaluate(
+        let violations = try await InvariantChecker.evaluate(
             configuration: configuration,
             graph: analysis.graph,
             scope: analysis.scope,
+            weights: analysis.weights,
         )
         let url = violationsBaselineURL(configuration: configuration, baseDirectory: baseDirectory)
         try InvariantChecker.ViolationsBaseline.save(Set(violations.map(\.key)), to: url)
@@ -114,11 +125,12 @@ package struct CheckRunner: Sendable {
         configuration: Configuration,
         baseDirectory: URL,
         analysis: GraphAnalysisSession.Analysis,
-    ) throws -> [BaselineGate.Finding] {
-        let violations = try InvariantChecker.evaluate(
+    ) async throws -> [BaselineGate.Finding] {
+        let violations = try await InvariantChecker.evaluate(
             configuration: configuration,
             graph: analysis.graph,
             scope: analysis.scope,
+            weights: analysis.weights,
         )
         guard !violations.isEmpty || configuration.invariants?.isEmpty == false else { return [] }
         let baselineURL = violationsBaselineURL(configuration: configuration, baseDirectory: baseDirectory)
@@ -151,20 +163,30 @@ package struct CheckRunner: Sendable {
         let edges: [String: [String]]
         let costPerTarget: Double
         let parallelism: Int
+        let featureCosts: [String: Double]?
     }
 
-    private func snapshot(from analysis: GraphAnalysisSession.Analysis) -> Snapshot {
+    private func snapshot(from analysis: GraphAnalysisSession.Analysis) async -> Snapshot {
         var edges: [String: [String]] = [:]
         for source in analysis.scope {
             let inScope = analysis.graph.dependencies(of: source).filter(analysis.scope.contains)
             edges[source.description] = inScope.map(\.description).sorted()
         }
-        return Snapshot(
+        return await Snapshot(
             metrics: analysis.metrics,
             edges: edges,
             costPerTarget: analysis.costPerTarget,
             parallelism: analysis.parallelism,
+            featureCosts: featureCosts(analysis: analysis),
         )
+    }
+
+    /// FeatureCost snapshot for feature-labeled targets (nil without weights)
+    private func featureCosts(analysis: GraphAnalysisSession.Analysis) async -> [String: Double]? {
+        guard let weights = analysis.weights else { return nil }
+        let roots = FeatureCostAnalyzer.featureRoots(analysis: analysis)
+        let entries = await FeatureCostAnalyzer.costs(of: roots, graph: analysis.graph, weights: weights)
+        return Dictionary(uniqueKeysWithValues: entries.map { ($0.target, $0.cost) })
     }
 
     private func baselineURL(configuration: Configuration, baseDirectory: URL) -> URL {

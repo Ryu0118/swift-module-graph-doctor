@@ -45,20 +45,21 @@ package enum InvariantRuleEngine {
     }
 
     /// Immutable evaluation inputs shared by all rule evaluators
-    private struct Context {
+    private struct Context: Sendable {
         let graph: ModuleGraph
         let scope: Set<TargetID>
         let labels: [TargetID: String]
         let labeler: TargetLabeler
     }
 
-    /// Evaluates all rules over the closure `scope`
+    /// Evaluates all rules over the closure `scope`.
+    /// Reachability scans per source target are independent and run in parallel
     package static func evaluate(
         rules: [Rule],
         graph: ModuleGraph,
         scope: Set<TargetID>,
         labeler: TargetLabeler,
-    ) -> [Violation] {
+    ) async -> [Violation] {
         var labels: [TargetID: String] = [:]
         for node in scope {
             if let label = labeler.label(of: node) {
@@ -72,7 +73,7 @@ package enum InvariantRuleEngine {
             case let .forbidEdge(name, from, to):
                 violations += forbidEdge(name: name, from: from, to: to, context: context)
             case let .forbidReach(name, from, to):
-                violations += forbidReach(name: name, from: from, to: to, context: context)
+                violations += await forbidReach(name: name, from: from, to: to, context: context)
             case let .forbidDependents(name, heavy, except):
                 violations += forbidDependents(name: name, heavy: heavy, except: except, context: context)
             }
@@ -105,12 +106,20 @@ package enum InvariantRuleEngine {
         from: String,
         to: String,
         context: Context,
-    ) -> [Violation] {
-        var violations: [Violation] = []
-        for source in context.scope where context.labels[source] == from {
-            violations += reachViolations(name: name, source: source, to: to, context: context)
+    ) async -> [Violation] {
+        let sources = context.scope.filter { context.labels[$0] == from }
+        return await withTaskGroup(of: [Violation].self) { group in
+            for source in sources {
+                group.addTask {
+                    reachViolations(name: name, source: source, to: to, context: context)
+                }
+            }
+            var violations: [Violation] = []
+            for await batch in group {
+                violations += batch
+            }
+            return violations
         }
-        return violations
     }
 
     private static func reachViolations(

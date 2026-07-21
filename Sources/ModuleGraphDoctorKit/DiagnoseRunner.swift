@@ -12,6 +12,8 @@ package struct DiagnoseReport: Sendable, Codable {
     package let workSpan: WorkSpanMetrics
     /// Top ranking of interface closure sizes for exported imports
     package let topInterfaceLoads: [InterfaceLoadAnalyzer.LoadEntry]
+    /// Top ranking of feature closure costs (present only when weights are configured)
+    package let topFeatureCosts: [FeatureCostAnalyzer.CostEntry]?
 }
 
 /// Takes a configuration and performs graph extraction, metrics computation, and report generation
@@ -45,12 +47,23 @@ package struct DiagnoseRunner: Sendable {
             moduleTable: moduleTable,
         )
 
+        var featureCosts: [FeatureCostAnalyzer.CostEntry]?
+        if let weights = analysis.weights {
+            let costs = await FeatureCostAnalyzer.costs(
+                of: FeatureCostAnalyzer.featureRoots(analysis: analysis),
+                graph: graph,
+                weights: weights,
+            )
+            featureCosts = Array(costs.prefix(configuration.analysis.topLoadCount ?? 15))
+        }
+
         return DiagnoseReport(
             roots: configuration.analysis.roots,
             costPerTarget: analysis.costPerTarget,
             parallelism: analysis.parallelism,
             workSpan: metrics,
             topInterfaceLoads: Array(loads.prefix(configuration.analysis.topLoadCount ?? 15)),
+            topFeatureCosts: featureCosts,
         )
     }
 }

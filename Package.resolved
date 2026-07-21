@@ -1,6 +1,15 @@
 {
-  "originHash" : "296cad58f76bb798903caac54587efab9ced79cd8a18f71f5e85005a78bb2cb4",
+  "originHash" : "fac3a9d0658b601881998bda02641f37162a16dbda4bcda83956e8688867e89d",
   "pins" : [
+    {
+      "identity" : "filemanagerprotocol",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Ryu0118/FileManagerProtocol",
+      "state" : {
+        "revision" : "64a9b362f9dcd933f6dad82603c2ab0ff23863fc",
+        "version" : "0.1.0"
+      }
+    },
     {
       "identity" : "processrunning",
       "kind" : "remoteSourceControl",

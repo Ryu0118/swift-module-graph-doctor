@@ -21,7 +21,7 @@ struct InvariantRuleEngineTests {
     }
 
     @Test("forbid-edgeはFeature→Liveの直接辺を検出する")
-    func forbidEdgeDetectsFeatureToLive() throws {
+    func forbidEdgeDetectsFeatureToLive() async throws {
         let feature = target("HomeFeature")
         let live = target("FooClientLive")
         let graph = ModuleGraph(
@@ -31,7 +31,7 @@ struct InvariantRuleEngineTests {
             testTargets: [],
         )
 
-        let violations = try InvariantRuleEngine.evaluate(
+        let violations = try await InvariantRuleEngine.evaluate(
             rules: [.forbidEdge(name: "feature-no-live", from: "feature", to: "live")],
             graph: graph,
             scope: graph.nonTestNodes,
@@ -42,7 +42,7 @@ struct InvariantRuleEngineTests {
     }
 
     @Test("forbid-reachは中間ノード経由の推移的到達をwitness path付きで検出する")
-    func forbidReachDetectsTransitiveLeak() throws {
+    func forbidReachDetectsTransitiveLeak() async throws {
         // interface -> plain -> live: no direct edge, but reachable
         let interface = target("FooClient")
         let middle = target("Helper")
@@ -54,7 +54,7 @@ struct InvariantRuleEngineTests {
             testTargets: [],
         )
 
-        let violations = try InvariantRuleEngine.evaluate(
+        let violations = try await InvariantRuleEngine.evaluate(
             rules: [.forbidReach(name: "no-live-reach", from: "interface", to: "live")],
             graph: graph,
             scope: graph.nonTestNodes,
@@ -66,7 +66,7 @@ struct InvariantRuleEngineTests {
     }
 
     @Test("forbid-reachのto:sdkは外部product依存のリークを検出する")
-    func forbidReachDetectsExternalSDKLeak() throws {
+    func forbidReachDetectsExternalSDKLeak() async throws {
         let interface = target("FooClient")
         let middle = target("Helper")
         let graph = ModuleGraph(
@@ -76,7 +76,7 @@ struct InvariantRuleEngineTests {
             testTargets: [],
         )
 
-        let violations = try InvariantRuleEngine.evaluate(
+        let violations = try await InvariantRuleEngine.evaluate(
             rules: [.forbidReach(name: "interface-no-sdk", from: "interface", to: "sdk")],
             graph: graph,
             scope: graph.nonTestNodes,
@@ -88,7 +88,7 @@ struct InvariantRuleEngineTests {
     }
 
     @Test("forbid-dependentsはallowlist外の依存元だけを違反にする")
-    func forbidDependentsAllowsOnlyListedLabels() throws {
+    func forbidDependentsAllowsOnlyListedLabels() async throws {
         let heavy = target("HeavyClientLive")
         let allowed = target("OtherUseCaseLive")
         let offender = target("HomeFeature")
@@ -99,7 +99,7 @@ struct InvariantRuleEngineTests {
             testTargets: [],
         )
 
-        let violations = try InvariantRuleEngine.evaluate(
+        let violations = try await InvariantRuleEngine.evaluate(
             rules: [.forbidDependents(name: "heavy-confined", heavy: "live", except: ["live", "app"])],
             graph: graph,
             scope: graph.nonTestNodes,

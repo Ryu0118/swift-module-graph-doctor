@@ -18,6 +18,7 @@ let package = Package(
         // generic化される破壊的変更が入りビルド不能になるため、exactで固定する
         .package(url: "https://github.com/swiftlang/swift-subprocess.git", exact: "0.2.1"),
         .package(url: "https://github.com/jpsim/Yams", from: "6.2.0"),
+        .package(url: "https://github.com/Ryu0118/FileManagerProtocol", from: "0.1.0"),
     ],
     targets: [
         .executableTarget(
@@ -38,6 +39,7 @@ let package = Package(
             dependencies: [
                 .product(name: "ProcessRunning", package: "ProcessRunning"),
                 .product(name: "Yams", package: "Yams"),
+                .product(name: "FileManagerProtocol", package: "FileManagerProtocol"),
             ],
         ),
         .testTarget(

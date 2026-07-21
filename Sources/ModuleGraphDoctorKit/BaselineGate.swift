@@ -48,11 +48,22 @@ package enum BaselineGate {
         package let makespanWarnSeconds: Double
         /// Regression at or above this value errors
         package let makespanErrorSeconds: Double
+        /// FeatureCost regression (seconds) at or above this value warns
+        package let featureCostWarnSeconds: Double
+        /// FeatureCost regression (seconds) at or above this value errors
+        package let featureCostErrorSeconds: Double
 
-        /// Creates thresholds (defaults: warn 0.5s / error 1.0s)
-        package init(makespanWarnSeconds: Double = 0.5, makespanErrorSeconds: Double = 1.0) {
+        /// Creates thresholds (defaults: makespan warn 0.5s / error 1.0s, featureCost warn 10s / error 30s)
+        package init(
+            makespanWarnSeconds: Double = 0.5,
+            makespanErrorSeconds: Double = 1.0,
+            featureCostWarnSeconds: Double = 10,
+            featureCostErrorSeconds: Double = 30,
+        ) {
             self.makespanWarnSeconds = makespanWarnSeconds
             self.makespanErrorSeconds = makespanErrorSeconds
+            self.featureCostWarnSeconds = featureCostWarnSeconds
+            self.featureCostErrorSeconds = featureCostErrorSeconds
         }
     }
 
@@ -61,10 +72,16 @@ package enum BaselineGate {
         baseline: GraphBaseline,
         current: WorkSpanMetrics,
         currentEdges: [String: [String]],
+        currentFeatureCosts: [String: Double]? = nil,
         thresholds: Thresholds = Thresholds(),
     ) -> [Finding] {
         var findings: [Finding] = []
         findings.append(contentsOf: evaluateMakespan(baseline: baseline, current: current, thresholds: thresholds))
+        findings.append(contentsOf: evaluateFeatureCosts(
+            baseline: baseline.featureCosts,
+            current: currentFeatureCosts,
+            thresholds: thresholds,
+        ))
 
         if current.criticalPathLength > baseline.criticalPathLength {
             findings.append(Finding(
@@ -99,6 +116,29 @@ package enum BaselineGate {
             return [Finding(severity: .warning, message: message)]
         }
         return []
+    }
+
+    /// Compares per-target closure costs; only regressions at or above the thresholds are reported
+    private static func evaluateFeatureCosts(
+        baseline: [String: Double]?,
+        current: [String: Double]?,
+        thresholds: Thresholds,
+    ) -> [Finding] {
+        guard let baseline, let current else { return [] }
+        var findings: [Finding] = []
+        for (target, cost) in current.sorted(by: { $0.key < $1.key }) {
+            guard let previous = baseline[target] else { continue }
+            let delta = cost - previous
+            guard delta >= thresholds.featureCostWarnSeconds else { continue }
+            let message = "feature cost of \(target) changed by "
+                + String(format: "%+.1f", delta)
+                + "s (\(String(format: "%.1f", previous)) -> \(String(format: "%.1f", cost)))"
+            findings.append(Finding(
+                severity: delta >= thresholds.featureCostErrorSeconds ? .error : .warning,
+                message: message,
+            ))
+        }
+        return findings
     }
 
     /// Lists new edges (candidate contributors to regressions) and removed edges as info

@@ -19,6 +19,8 @@ package struct GraphBaseline: Codable, Sendable, Equatable {
     /// Dependency edges within the closure (target -> sorted list of dependencies).
     /// Used to pinpoint the edges contributing to a regression
     package let edges: [String: [String]]
+    /// FeatureCost snapshot (target -> closure cost in seconds). Present only when weights are configured
+    package let featureCosts: [String: Double]?
 
     /// Creates a baseline from its values
     package init(
@@ -29,6 +31,7 @@ package struct GraphBaseline: Codable, Sendable, Equatable {
         criticalPathLength: Int,
         simulatedMakespan: Double,
         edges: [String: [String]],
+        featureCosts: [String: Double]? = nil,
     ) {
         self.roots = roots
         self.costPerTarget = costPerTarget
@@ -37,6 +40,7 @@ package struct GraphBaseline: Codable, Sendable, Equatable {
         self.criticalPathLength = criticalPathLength
         self.simulatedMakespan = simulatedMakespan
         self.edges = edges
+        self.featureCosts = featureCosts
     }
 
     /// Loads from a JSON file

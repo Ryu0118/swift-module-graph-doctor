@@ -24,6 +24,8 @@ package struct Configuration: Decodable, Sendable, Equatable {
     package let labels: Labels?
     /// Architecture invariant rules (optional)
     package let invariants: [InvariantSpec]?
+    /// Target weights file path (YAML, target name -> seconds). Optional
+    package let weights: String?
 
     /// Package scanning settings
     package struct Packages: Decodable, Sendable, Equatable {
@@ -77,6 +79,10 @@ package struct Configuration: Decodable, Sendable, Equatable {
         package let makespanErrorSeconds: Double?
         /// Violations baseline file path. Defaults to violations-baseline.yml
         package let violationsBaseline: String?
+        /// FeatureCost regression (seconds) at or above which check warns. Defaults to 10
+        package let featureCostWarnSeconds: Double?
+        /// FeatureCost regression (seconds) at or above which check errors. Defaults to 30
+        package let featureCostErrorSeconds: Double?
 
         /// Builds directly, for tests
         package init(
@@ -84,11 +90,15 @@ package struct Configuration: Decodable, Sendable, Equatable {
             makespanWarnSeconds: Double? = nil,
             makespanErrorSeconds: Double? = nil,
             violationsBaseline: String? = nil,
+            featureCostWarnSeconds: Double? = nil,
+            featureCostErrorSeconds: Double? = nil,
         ) {
             self.baseline = baseline
             self.makespanWarnSeconds = makespanWarnSeconds
             self.makespanErrorSeconds = makespanErrorSeconds
             self.violationsBaseline = violationsBaseline
+            self.featureCostWarnSeconds = featureCostWarnSeconds
+            self.featureCostErrorSeconds = featureCostErrorSeconds
         }
     }
 
@@ -100,6 +110,8 @@ package struct Configuration: Decodable, Sendable, Equatable {
         package let rules: [Rule]?
         /// External product names labeled as SDKs (for `forbid-reach: ... -> sdk`)
         package let sdk: [String]?
+        /// Auto-label targets whose measured weight is at or above this many seconds as `heavy`
+        package let heavyThresholdSeconds: Double?
 
         /// A regex labeling rule
         package struct Rule: Decodable, Sendable, Equatable {
@@ -120,10 +132,12 @@ package struct Configuration: Decodable, Sendable, Equatable {
             explicit: [String: String]? = nil,
             rules: [Rule]? = nil,
             sdk: [String]? = nil,
+            heavyThresholdSeconds: Double? = nil,
         ) {
             self.explicit = explicit
             self.rules = rules
             self.sdk = sdk
+            self.heavyThresholdSeconds = heavyThresholdSeconds
         }
     }
 
@@ -187,12 +201,14 @@ package struct Configuration: Decodable, Sendable, Equatable {
         check: Check? = nil,
         labels: Labels? = nil,
         invariants: [InvariantSpec]? = nil,
+        weights: String? = nil,
     ) {
         self.packages = packages
         self.analysis = analysis
         self.check = check
         self.labels = labels
         self.invariants = invariants
+        self.weights = weights
     }
 
     /// Decodes from a YAML string

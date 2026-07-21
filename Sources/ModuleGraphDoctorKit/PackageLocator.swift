@@ -1,3 +1,4 @@
+import FileManagerProtocol
 import Foundation
 
 /// Enumerates package directories (those containing `Package.swift`) under scan roots.
@@ -10,7 +11,7 @@ package enum PackageLocator {
     /// Enumerates package directories under the scan roots (sorted, deduplicated)
     package static func locatePackages(
         under roots: [URL],
-        fileManager: FileManager = .default,
+        fileManager: any FileManagerProtocol = FileManager.default,
     ) -> [URL] {
         var found: [URL] = []
         var seen: Set<String> = []
@@ -26,7 +27,7 @@ package enum PackageLocator {
         return found.sorted { $0.path(percentEncoded: false) < $1.path(percentEncoded: false) }
     }
 
-    private static func candidates(under root: URL, fileManager: FileManager) -> [URL] {
+    private static func candidates(under root: URL, fileManager: any FileManagerProtocol) -> [URL] {
         if hasManifest(root, fileManager: fileManager) {
             return [root]
         }
@@ -43,7 +44,7 @@ package enum PackageLocator {
         }
     }
 
-    private static func hasManifest(_ directory: URL, fileManager: FileManager) -> Bool {
+    private static func hasManifest(_ directory: URL, fileManager: any FileManagerProtocol) -> Bool {
         fileManager.fileExists(
             atPath: directory.appendingPathComponent("Package.swift").path(percentEncoded: false),
         )

@@ -34,6 +34,13 @@ package enum DiagnoseReportRenderer {
                 ellipsis,
             ))
         }
+        if let costs = report.topFeatureCosts, !costs.isEmpty {
+            lines.append("")
+            lines.append("Top feature cost (measured build seconds pulled into the closure):")
+            for entry in costs {
+                lines.append(String(format: "  %8.1fs  %@", entry.cost, entry.target))
+            }
+        }
         if !report.topInterfaceLoads.isEmpty {
             lines.append("")
             lines.append("Top interface load (public-import transitive closure size):")

@@ -49,15 +49,16 @@ struct BaselineGateTests {
         #expect(findings.isEmpty)
     }
 
-    @Test("makespan悪化は警告閾値とエラー閾値で段階的に判定される")
+    @Test("makespan悪化は相対%の警告閾値とエラー閾値で段階的に判定される")
     func makespanRegressionEscalatesBySeverity() {
         let baseline = makeBaseline(makespan: 10.0)
 
+        // defaults: warn 5%, error 10%
         let ok = BaselineGate.evaluate(
             baseline: baseline, current: makeMetrics(makespan: 10.4), currentEdges: [:],
         )
         let warn = BaselineGate.evaluate(
-            baseline: baseline, current: makeMetrics(makespan: 10.6), currentEdges: [:],
+            baseline: baseline, current: makeMetrics(makespan: 10.7), currentEdges: [:],
         )
         let error = BaselineGate.evaluate(
             baseline: baseline, current: makeMetrics(makespan: 11.2), currentEdges: [:],
@@ -66,6 +67,18 @@ struct BaselineGateTests {
         #expect(ok.isEmpty)
         #expect(warn.map(\.severity) == [.warning])
         #expect(error.map(\.severity) == [.error])
+    }
+
+    @Test("相対%は超えても絶対ノイズ床未満の微小悪化は無視される")
+    func tinyBaselineRegressionsAreFilteredByNoiseFloor() {
+        // +50% relative, but delta 0.05 is below the 0.2 makespan floor
+        let findings = BaselineGate.evaluate(
+            baseline: makeBaseline(makespan: 0.1),
+            current: makeMetrics(makespan: 0.15),
+            currentEdges: [:],
+        )
+
+        #expect(findings.isEmpty)
     }
 
     @Test("makespan改善は判定を出さない")
@@ -115,7 +128,7 @@ struct BaselineGateTests {
             baseline: makeBaseline(makespan: 10.0),
             current: makeMetrics(makespan: 10.3),
             currentEdges: [:],
-            thresholds: BaselineGate.Thresholds(makespanWarnSeconds: 0.2, makespanErrorSeconds: 0.25),
+            thresholds: BaselineGate.Thresholds(makespanWarnPercent: 1, makespanErrorPercent: 2),
         )
 
         #expect(findings.map(\.severity) == [.error])

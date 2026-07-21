@@ -42,28 +42,41 @@ package enum BaselineGate {
         }
     }
 
-    /// Thresholds for simulated-makespan regression (seconds)
+    /// Regression thresholds, expressed as percentages relative to the baseline.
+    ///
+    /// Relative thresholds are scale-invariant: re-measuring `weights.yml` or
+    /// `costPerTarget` on a faster or slower machine rescales every number by
+    /// the same factor, so percentage-based gates stay calibrated while
+    /// absolute-seconds gates would all fire (or all go blind). Tiny baselines
+    /// would make percentages noisy, so a small absolute noise floor applies
+    /// on top: a regression must clear both the percentage and the floor
     package struct Thresholds: Sendable, Equatable {
-        /// Regression at or above this value warns
-        package let makespanWarnSeconds: Double
-        /// Regression at or above this value errors
-        package let makespanErrorSeconds: Double
-        /// FeatureCost regression (seconds) at or above this value warns
-        package let buildCostWarnSeconds: Double
-        /// FeatureCost regression (seconds) at or above this value errors
-        package let buildCostErrorSeconds: Double
+        /// Makespan regression (percent of the baseline) at or above which check warns
+        package let makespanWarnPercent: Double
+        /// Makespan regression (percent of the baseline) at or above which check errors
+        package let makespanErrorPercent: Double
+        /// Build-cost regression (percent of the baseline) at or above which check warns
+        package let buildCostWarnPercent: Double
+        /// Build-cost regression (percent of the baseline) at or above which check errors
+        package let buildCostErrorPercent: Double
 
-        /// Creates thresholds (defaults: makespan warn 0.5s / error 1.0s, featureCost warn 10s / error 30s)
+        /// Noise floor for makespan deltas (in the same unit as the makespan)
+        static let makespanFloor = 0.2
+        /// Noise floor for build-cost deltas (in the same unit as the weights)
+        static let buildCostFloor = 2.0
+
+        /// Creates thresholds (defaults: makespan warn 5% / error 10%,
+        /// build cost warn 10% / error 25%)
         package init(
-            makespanWarnSeconds: Double = 0.5,
-            makespanErrorSeconds: Double = 1.0,
-            buildCostWarnSeconds: Double = 10,
-            buildCostErrorSeconds: Double = 30,
+            makespanWarnPercent: Double = 5,
+            makespanErrorPercent: Double = 10,
+            buildCostWarnPercent: Double = 10,
+            buildCostErrorPercent: Double = 25,
         ) {
-            self.makespanWarnSeconds = makespanWarnSeconds
-            self.makespanErrorSeconds = makespanErrorSeconds
-            self.buildCostWarnSeconds = buildCostWarnSeconds
-            self.buildCostErrorSeconds = buildCostErrorSeconds
+            self.makespanWarnPercent = makespanWarnPercent
+            self.makespanErrorPercent = makespanErrorPercent
+            self.buildCostWarnPercent = buildCostWarnPercent
+            self.buildCostErrorPercent = buildCostErrorPercent
         }
     }
 
@@ -105,17 +118,43 @@ package enum BaselineGate {
         current: WorkSpanMetrics,
         thresholds: Thresholds,
     ) -> [Finding] {
-        let delta = current.simulatedMakespan - baseline.simulatedMakespan
-        let formatted = String(format: "%+.2f", delta)
-        let message = "simulated makespan changed by \(formatted)s "
-            + "(\(baseline.simulatedMakespan) -> \(current.simulatedMakespan))"
-        if delta >= thresholds.makespanErrorSeconds {
-            return [Finding(severity: .error, message: message)]
-        }
-        if delta >= thresholds.makespanWarnSeconds {
-            return [Finding(severity: .warning, message: message)]
-        }
-        return []
+        guard let finding = regression(
+            name: "simulated makespan",
+            baseline: baseline.simulatedMakespan,
+            current: current.simulatedMakespan,
+            gate: Gate(
+                warnPercent: thresholds.makespanWarnPercent,
+                errorPercent: thresholds.makespanErrorPercent,
+                floor: Thresholds.makespanFloor,
+            ),
+        ) else { return [] }
+        return [finding]
+    }
+
+    /// Warn/error percentages plus the absolute noise floor for one metric
+    private struct Gate {
+        let warnPercent: Double
+        let errorPercent: Double
+        let floor: Double
+    }
+
+    /// Percentage-based regression judgement with an absolute noise floor
+    private static func regression(
+        name: String,
+        baseline: Double,
+        current: Double,
+        gate: Gate,
+    ) -> Finding? {
+        let delta = current - baseline
+        guard baseline > 0, delta >= gate.floor else { return nil }
+        let percent = delta / baseline * 100
+        guard percent >= gate.warnPercent else { return nil }
+        let message = "\(name) regressed by "
+            + String(format: "%+.1f%% (%.1f -> %.1f)", percent, baseline, current)
+        return Finding(
+            severity: percent >= gate.errorPercent ? .error : .warning,
+            message: message,
+        )
     }
 
     /// Compares per-target closure costs; only regressions at or above the thresholds are reported
@@ -128,15 +167,18 @@ package enum BaselineGate {
         var findings: [Finding] = []
         for (target, cost) in current.sorted(by: { $0.key < $1.key }) {
             guard let previous = baseline[target] else { continue }
-            let delta = cost - previous
-            guard delta >= thresholds.buildCostWarnSeconds else { continue }
-            let message = "build cost of \(target) changed by "
-                + String(format: "%+.1f", delta)
-                + "s (\(String(format: "%.1f", previous)) -> \(String(format: "%.1f", cost)))"
-            findings.append(Finding(
-                severity: delta >= thresholds.buildCostErrorSeconds ? .error : .warning,
-                message: message,
-            ))
+            if let finding = regression(
+                name: "build cost of \(target)",
+                baseline: previous,
+                current: cost,
+                gate: Gate(
+                    warnPercent: thresholds.buildCostWarnPercent,
+                    errorPercent: thresholds.buildCostErrorPercent,
+                    floor: Thresholds.buildCostFloor,
+                ),
+            ) {
+                findings.append(finding)
+            }
         }
         return findings
     }

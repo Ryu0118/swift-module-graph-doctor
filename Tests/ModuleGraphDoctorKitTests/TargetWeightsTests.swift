@@ -89,8 +89,8 @@ struct TargetWeightsTests {
         ])
     }
 
-    @Test("FeatureCostのbaseline比較は閾値以上の悪化だけを段階的に検出する")
-    func featureCostGateEscalatesBySeverity() {
+    @Test("build costのbaseline比較は相対%で悪化だけを段階的に検出する")
+    func buildCostGateEscalatesBySeverity() {
         let baseline = GraphBaseline(
             roots: ["P/App"],
             costPerTarget: 1,
@@ -120,9 +120,11 @@ struct TargetWeightsTests {
             currentFeatureCosts: ["P/HomeFeature": 145, "P/LeanFeature": 25],
         )
 
-        // +45s on HomeFeature errors (>= 30), +15s on LeanFeature warns (>= 10)
+        // +45% on HomeFeature errors (>= 25%); +150% on LeanFeature but the
+        // +15s delta relative to a 10s baseline also clears the 2s floor -> error;
+        // both are regressions, severities follow the percentages
         #expect(findings.contains { $0.severity == .error && $0.message.contains("P/HomeFeature") })
-        #expect(findings.contains { $0.severity == .warning && $0.message.contains("P/LeanFeature") })
+        #expect(findings.contains { $0.severity == .error && $0.message.contains("P/LeanFeature") })
     }
 
     @Test("数値layer（重み閾値）は閾値以上のtargetにマッチし、完全一致が優先される")

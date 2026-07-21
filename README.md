@@ -159,9 +159,9 @@ What is gated, and at which severity:
 
 | Finding | Default severity |
 |---|---|
-| simulated makespan regressed | warning at +0.5s, **error at +1.0s** |
+| simulated makespan regressed | warning at +5%, **error at +10%** |
 | critical path grew | warning |
-| a target's build cost regressed | warning at +10s, **error at +30s** |
+| a target's build cost regressed | warning at +10%, **error at +25%** |
 | new lint violation (not in the violations baseline) | **error**, with witness path |
 | violation in baseline no longer observed | info (prune the stale entry) |
 | new / removed edges, target count changes | info |
@@ -225,10 +225,10 @@ lint:
 check:
   baseline: "graph-baseline.json"
   violationsBaseline: "violations-baseline.yml"
-  makespanWarnSeconds: 0.5
-  makespanErrorSeconds: 1.0
-  buildCostWarnSeconds: 10
-  buildCostErrorSeconds: 30
+  makespanWarnPercent: 5        # thresholds are relative to the baseline, so
+  makespanErrorPercent: 10      # re-measuring weights on a faster machine
+  buildCostWarnPercent: 10      # does not de-calibrate the gates (a small
+  buildCostErrorPercent: 25     # absolute noise floor filters tiny baselines)
 ```
 
 ## Graph Lint

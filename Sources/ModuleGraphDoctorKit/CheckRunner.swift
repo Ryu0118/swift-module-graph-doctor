@@ -54,10 +54,10 @@ package struct CheckRunner: Sendable {
         let current = await snapshot(from: analysis)
 
         let thresholds = BaselineGate.Thresholds(
-            makespanWarnSeconds: configuration.check?.makespanWarnSeconds ?? 0.5,
-            makespanErrorSeconds: configuration.check?.makespanErrorSeconds ?? 1.0,
-            buildCostWarnSeconds: configuration.check?.buildCostWarnSeconds ?? 10,
-            buildCostErrorSeconds: configuration.check?.buildCostErrorSeconds ?? 30,
+            makespanWarnPercent: configuration.check?.makespanWarnPercent ?? 5,
+            makespanErrorPercent: configuration.check?.makespanErrorPercent ?? 10,
+            buildCostWarnPercent: configuration.check?.buildCostWarnPercent ?? 10,
+            buildCostErrorPercent: configuration.check?.buildCostErrorPercent ?? 25,
         )
         var findings = BaselineGate.evaluate(
             baseline: baseline,

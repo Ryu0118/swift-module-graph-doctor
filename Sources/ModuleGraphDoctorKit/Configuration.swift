@@ -124,32 +124,32 @@ package struct Configuration: Decodable, Sendable, Equatable {
     package struct Check: Decodable, Sendable, Equatable {
         /// Baseline file path (relative to the config file, or absolute). Defaults to graph-baseline.json
         package let baseline: String?
-        /// Makespan regression (seconds) at or above which check warns. Defaults to 0.5
-        package let makespanWarnSeconds: Double?
-        /// Makespan regression (seconds) at or above which check errors. Defaults to 1.0
-        package let makespanErrorSeconds: Double?
+        /// Makespan regression (percent of baseline) at or above which check warns. Defaults to 5
+        package let makespanWarnPercent: Double?
+        /// Makespan regression (percent of baseline) at or above which check errors. Defaults to 10
+        package let makespanErrorPercent: Double?
         /// Violations baseline file path. Defaults to violations-baseline.yml
         package let violationsBaseline: String?
-        /// FeatureCost regression (seconds) at or above which check warns. Defaults to 10
-        package let buildCostWarnSeconds: Double?
-        /// FeatureCost regression (seconds) at or above which check errors. Defaults to 30
-        package let buildCostErrorSeconds: Double?
+        /// Build-cost regression (percent of baseline) at or above which check warns. Defaults to 10
+        package let buildCostWarnPercent: Double?
+        /// Build-cost regression (percent of baseline) at or above which check errors. Defaults to 25
+        package let buildCostErrorPercent: Double?
 
         /// Builds directly, for tests
         package init(
             baseline: String? = nil,
-            makespanWarnSeconds: Double? = nil,
-            makespanErrorSeconds: Double? = nil,
+            makespanWarnPercent: Double? = nil,
+            makespanErrorPercent: Double? = nil,
             violationsBaseline: String? = nil,
-            buildCostWarnSeconds: Double? = nil,
-            buildCostErrorSeconds: Double? = nil,
+            buildCostWarnPercent: Double? = nil,
+            buildCostErrorPercent: Double? = nil,
         ) {
             self.baseline = baseline
-            self.makespanWarnSeconds = makespanWarnSeconds
-            self.makespanErrorSeconds = makespanErrorSeconds
+            self.makespanWarnPercent = makespanWarnPercent
+            self.makespanErrorPercent = makespanErrorPercent
             self.violationsBaseline = violationsBaseline
-            self.buildCostWarnSeconds = buildCostWarnSeconds
-            self.buildCostErrorSeconds = buildCostErrorSeconds
+            self.buildCostWarnPercent = buildCostWarnPercent
+            self.buildCostErrorPercent = buildCostErrorPercent
         }
     }
 

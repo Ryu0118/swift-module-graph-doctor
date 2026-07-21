@@ -1,0 +1,16 @@
+# APM (Agent Package Manager) producer manifest.
+# Lets consumers install the skill with:
+#   apm install Ryu0118/swift-module-graph-doctor
+# The skill source lives in skills/ (single source of truth, shared with the
+# Claude Code plugin); .apm/skills/ contains symlinks to it.
+name: swift-module-graph-doctor
+version: 0.1.0
+description: Diagnose and gate Swift package module graphs (work-span model, baselines, layer lint).
+author: Ryu0118
+license: MIT
+dependencies:
+  apm: []
+  mcp: []
+includes:
+  - .apm/skills/module-graph-doctor/
+scripts: {}

@@ -1,0 +1,12 @@
+{
+  "name": "module-graph-doctor",
+  "version": "0.1.0",
+  "description": "Diagnose and gate Swift package module graphs: work-span metrics, baseline regression gates, and layer lint.",
+  "author": {
+    "name": "Ryu0118"
+  },
+  "homepage": "https://github.com/Ryu0118/swift-module-graph-doctor",
+  "repository": "https://github.com/Ryu0118/swift-module-graph-doctor",
+  "license": "MIT",
+  "keywords": ["swift", "modules", "build-performance", "architecture", "lint"]
+}

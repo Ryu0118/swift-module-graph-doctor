@@ -1,0 +1,17 @@
+{
+  "name": "module-graph-doctor",
+  "owner": {
+    "name": "Ryu0118"
+  },
+  "metadata": {
+    "description": "swift-module-graph-doctor skill for Claude Code",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "module-graph-doctor",
+      "source": "./.claude/plugins/module-graph-doctor",
+      "category": "productivity"
+    }
+  ]
+}

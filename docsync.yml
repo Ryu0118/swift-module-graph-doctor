@@ -7,11 +7,11 @@ rules:
   doc: CLAUDE.md
   message: Package structure, mise tasks, or CLI command surface changed - update
     CLAUDE.md if directory structure, commands, or conventions changed.
-  checksum: 822148350540c80991b9734e1bcf76ec14b64aaee896f3fa70b317e5dd6016a4
+  checksum: 0153e6e705468611fb47e54a0ea008e98621ae522390417c8022f9291e3ff420
 - name: readme-usage
   sources:
   - Sources/ModuleGraphDoctorCLI/**/*.swift
   doc: README.md
   message: CLI command surface changed - update README usage if commands or options
     changed.
-  checksum: 939aeb299380235a6b0f3928174acf00fa0dd20fbad342a872012ef850d1c00a
+  checksum: bc2248dd50d59f3184a5a1d71999e9cf1e3863314cb98c077381211a518539cb

@@ -25,6 +25,7 @@ the graph never quietly degrades again.
 - [Configuration](#configuration)
 - [Graph Lint](#graph-lint)
 - [JSON Output](#json-output)
+- [Agent Skill](#agent-skill)
 - [Installation](#installation)
 - [Development](#development)
 - [License](#license)
@@ -172,9 +173,17 @@ baseline files — the same idea as a snapshot test for your module graph.
 ### weights
 
 ```sh
-xclogparser parse --project MyApp --reporter json --output build.json
+# CLI builds need -resultBundlePath, or Xcode may leave a stale .xcactivitylog
+xcodebuild -workspace App.xcworkspace -scheme App \
+  -derivedDataPath /tmp/dd -resultBundlePath /tmp/rb.xcresult build
+xclogparser parse --file "$(ls -t /tmp/dd/Logs/Build/*.xcactivitylog | head -1)" \
+  --reporter json --output build.json
 swift-module-graph-doctor weights --log build.json
 ```
+
+Use a **clean-build** log (incremental logs only contain the recompiled
+targets; everything else silently weighs 0), and if the newest log fails with
+`not a valid SLF log` it came from an interrupted build -- use the previous one.
 
 Sums the durations of `Compile *` steps per target (deliberately ignoring the
 "Build target" wall time, which includes waiting on other targets) and writes
@@ -272,6 +281,43 @@ them down over time.
 | `workSpan.widthProfile[]` | `{depth, width, targets}` | width per depth layer |
 | `topInterfaceLoads[]` | `{target, load}` | public-import closure sizes |
 | `topBuildCosts[]?` | `{target, cost}` | build costs incl. dependencies (only with weights) |
+
+## Agent Skill
+
+The repo ships a `module-graph-doctor` skill (concepts, workflows, and the
+build-log traps) so AI agents can drive the tool correctly. Install it any of
+these ways:
+
+```sh
+# Built-in (sim-use style): writes SKILL.md into the client's skills directory
+swift-module-graph-doctor install-skills                  # auto-detects the client
+swift-module-graph-doctor install-skills --client claude  # ~/.claude/skills
+swift-module-graph-doctor install-skills --client agents  # ~/.agents/skills
+swift-module-graph-doctor install-skills --dest .claude/skills   # project-local
+# also: --print / --force / --uninstall
+```
+
+```sh
+# Claude Code plugin
+/plugin marketplace add Ryu0118/swift-module-graph-doctor
+/plugin install module-graph-doctor@module-graph-doctor
+
+# Codex plugin
+codex plugin marketplace add Ryu0118/swift-module-graph-doctor
+codex plugin add module-graph-doctor@module-graph-doctor
+
+# APM (Agent Package Manager)
+apm install Ryu0118/swift-module-graph-doctor
+
+# GitHub CLI (v2.90.0+)
+gh skill install Ryu0118/swift-module-graph-doctor module-graph-doctor --agent claude-code
+
+# skills CLI
+npx skills add Ryu0118/swift-module-graph-doctor --all
+```
+
+The single source of truth is `skills/module-graph-doctor/SKILL.md`; the copy
+embedded in the binary for `install-skills` is kept in sync by a unit test.
 
 ## Installation
 

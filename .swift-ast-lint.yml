@@ -1,0 +1,20 @@
+included_paths:
+  - "Sources/**/*.swift"
+  - "Tests/**/*.swift"
+
+excluded_paths:
+  - ".build/**"
+  - ".swiftpm/**"
+  - "**/.build/**"
+  - "**/.swiftpm/**"
+  - "**/Fixtures/**"
+
+rules:
+  deep-nesting:
+    args:
+      warning_depth: 4
+      error_depth: 4
+      severity: error
+    include:
+      - "Sources/**"
+      - "Tests/**"

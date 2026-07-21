@@ -1,0 +1,26 @@
+#!/bin/sh
+# staged Swift filesにSwiftFormat（lint mode）とSwiftLint --strictを適用する。
+# ツールはmise管理（.mise.toml）。未導入なら `mise run setup` を促して落とす。
+set -eu
+
+STAGED=$(git diff --cached --name-only --diff-filter=ACM | grep '\.swift$' || true)
+[ -z "$STAGED" ] && exit 0
+
+if ! command -v mise >/dev/null 2>&1; then
+  echo "pre-commit: mise not found. Install mise and run: mise run setup" >&2
+  exit 1
+fi
+
+SWIFTFORMAT=$(mise which swiftformat 2>/dev/null) || {
+  echo "pre-commit: swiftformat not installed. Run: mise run setup" >&2
+  exit 1
+}
+SWIFTLINT=$(mise which swiftlint 2>/dev/null) || {
+  echo "pre-commit: swiftlint not installed. Run: mise run setup" >&2
+  exit 1
+}
+
+# shellcheck disable=SC2086
+"$SWIFTFORMAT" --config .swiftformat --lint $STAGED
+# shellcheck disable=SC2086
+"$SWIFTLINT" lint --config .swiftlint.yml --strict --no-cache $STAGED

@@ -1,0 +1,35 @@
+# 開発ツールはmiseで管理する（nestfileは使わない）。
+# spm: backendはGitHub Releaseのartifactbundleを取得する。
+[tools]
+"spm:nicklockwood/SwiftFormat" = { version = "0.62.1", artifactbundle = true }
+"spm:realm/SwiftLint" = { version = "0.65.0", artifactbundle = true }
+"spm:Ryu0118/my-swift-linter" = { version = "0.12.3", artifactbundle = true }
+"spm:Ryu0118/docsync" = { version = "0.3.1", artifactbundle = true }
+
+[tasks.setup]
+description = "開発環境セットアップ（ツール導入 + git hooks）"
+run = ["mise install", "./scripts/setup-hooks.sh"]
+
+[tasks.format]
+description = "SwiftFormatでフォーマット"
+run = "swiftformat --config .swiftformat ."
+
+[tasks.lint]
+description = "format差分 + SwiftLint --strict + AST lint"
+run = [
+    "swiftformat --lint --config .swiftformat .",
+    "swiftlint lint --config .swiftlint.yml --strict --no-cache",
+    "my-swift-linter --config .swift-ast-lint.yml --no-cache Sources Tests Package.swift",
+]
+
+[tasks.test]
+description = "ユニットテスト"
+run = "swift test"
+
+[tasks.docsync]
+description = "ドキュメント同期チェック"
+run = "docsync check"
+
+[tasks.check]
+description = "コミット前の一括チェック（lint + docsync）"
+depends = ["lint", "docsync"]

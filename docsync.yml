@@ -1,0 +1,17 @@
+rules:
+- name: claude-md-project
+  sources:
+  - Package.swift
+  - .mise.toml
+  - Sources/ModuleGraphDoctorCLI/**/*.swift
+  doc: CLAUDE.md
+  message: Package structure, mise tasks, or CLI command surface changed - update
+    CLAUDE.md if directory structure, commands, or conventions changed.
+  checksum: 13c3e57a9deefc9d152016f2868139ca522ef32e6fdd81357b42f56387b68d0f
+- name: readme-usage
+  sources:
+  - Sources/ModuleGraphDoctorCLI/**/*.swift
+  doc: README.md
+  message: CLI command surface changed - update README usage if commands or options
+    changed.
+  checksum: a6a4c5499cf6b1718c3d70f93b2ba4ea4a26876acaabcce6f953fa0594935b92

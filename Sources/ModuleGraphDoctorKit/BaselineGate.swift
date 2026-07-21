@@ -1,4 +1,4 @@
-import ModuleGraphKit
+import SwiftModuleGraph
 
 /// Compares the baseline against current values (pure logic).
 ///

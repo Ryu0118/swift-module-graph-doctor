@@ -1,5 +1,5 @@
 import Foundation
-import ModuleGraphKit
+import SwiftModuleGraph
 
 /// Report produced by a diagnose run
 package struct DiagnoseReport: Sendable, Codable {

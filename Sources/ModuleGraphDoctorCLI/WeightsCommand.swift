@@ -1,7 +1,7 @@
 import ArgumentParser
 import Foundation
 import ModuleGraphDoctorKit
-import ModuleGraphKit
+import SwiftModuleGraph
 
 /// Generates the target weights file from an XCLogParser JSON build report
 struct WeightsCommand: AsyncParsableCommand {

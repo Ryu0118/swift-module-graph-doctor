@@ -1,5 +1,5 @@
 @testable import ModuleGraphDoctorKit
-import ModuleGraphKit
+import SwiftModuleGraph
 import Testing
 
 @Suite

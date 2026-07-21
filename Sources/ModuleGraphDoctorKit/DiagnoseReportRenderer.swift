@@ -1,5 +1,5 @@
 import Foundation
-import ModuleGraphKit
+import SwiftModuleGraph
 
 /// Renders a `DiagnoseReport` for humans (text) or machines (JSON).
 ///

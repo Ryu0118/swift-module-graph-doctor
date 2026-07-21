@@ -1,7 +1,7 @@
 import FileManagerProtocol
 import Foundation
-import ModuleGraphKit
 import ModuleGraphLint
+import SwiftModuleGraph
 
 /// Runs the baseline comparison gate: graph extraction, metrics computation, baseline loading, and comparison
 package struct CheckRunner: Sendable {

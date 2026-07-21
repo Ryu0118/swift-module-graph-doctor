@@ -349,7 +349,7 @@ The tool is split across three repositories, layered bottom-up
 
 | Repository | Provides |
 |---|---|
-| [swift-module-graph-kit](https://github.com/Ryu0118/swift-module-graph-kit) | `ModuleGraphKit` — graph extraction, work-span analysis, import scanning, measured build costs |
+| [swift-module-graph](https://github.com/Ryu0118/swift-module-graph) | `SwiftModuleGraph` — graph extraction, work-span analysis, import scanning, measured build costs |
 | [swift-module-graph-lint](https://github.com/Ryu0118/swift-module-graph-lint) | `ModuleGraphLint` — layer classification, deny DSL, invariant rule engine, violations baseline |
 | swift-module-graph-doctor (this repo) | the CLI: configuration, diagnose/check/weights runners, baseline gate, report rendering |
 

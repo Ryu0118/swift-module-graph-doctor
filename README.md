@@ -6,6 +6,8 @@
 [![Swift](https://img.shields.io/badge/Swift-6.2-F05138?logo=swift&logoColor=white)](https://swift.org)
 [![Platform](https://img.shields.io/badge/platform-macOS%2026%2B-lightgrey)](https://developer.apple.com/macos/)
 
+**[Full API documentation →](https://ryu0118.github.io/swift-module-graph-doctor/documentation/swift-module-graph-doctor/)**
+
 Your build is slow and someone proposes "let's split the big module". Will it
 actually help? swift-module-graph-doctor answers that question with a formal
 model instead of vibes: it extracts the target-level dependency graph across

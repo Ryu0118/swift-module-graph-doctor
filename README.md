@@ -47,41 +47,24 @@ the graph never quietly degrades again.
 
 ## Quick Start
 
-Zero config — run it in your package or workspace directory. Packages are
-discovered automatically; the analysis roots default to every target nothing
-else depends on (typically your app):
+Zero config — run it in your workspace directory:
 
 ```sh
 swift-module-graph-doctor diagnose
 ```
 
 ```text
-N             195 targets   size of the dependency closure
-D             18 targets    longest dependency chain (builds serially)
-T_inf = D x c 18.0s         depth bound: infinite workers cannot beat the chain
-T_1/p         19.5s         width bound: 10 workers cannot beat total work / 10
-makespan^     21.0s         simulated build time on 10 workers
+T_inf = D x c 18.0s   depth bound: the longest chain, however many workers you have
+T_1/p         19.5s   width bound: total work / your core count
+makespan^     21.0s   simulated build time
 
 Verdict: BALANCED -- at the knee (the two bounds are within 10%)
-  Neither flattening the chain alone nor adding workers alone will
-  make this build meaningfully faster.
 ```
 
-That verdict is the point of the tool: it tells you which refactoring can
-possibly pay off before you spend a week on it. Then, to keep the graph from
-quietly degrading, freeze the current state and add `check` to CI:
-
-```sh
-swift-module-graph-doctor check --update-baseline
-git add .module-graph-doctor/graph-baseline.json
-```
-
-From now on, this is what a bad PR sees (exit code 1):
-
-```text
-[error] build cost of MyApp/HomeFeature regressed: 96.2s -> 131.0s (+36%)
-[info] new edge: MyApp/HomeFeature -> Core/TimelineClientLive
-```
+The verdict tells you which refactor can possibly pay off — see
+[The Model](#the-model) for what these numbers mean. Once you're ready to
+stop regressions in CI, freeze a baseline and add `check` (see
+[check](#check) below).
 
 ## Commands
 

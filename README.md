@@ -41,9 +41,6 @@ the graph never quietly degrades again.
 - ⚖️ **Measured build costs** — feed an [XCLogParser](https://github.com/MobileNativeFoundation/XCLogParser)
   report and every target gets a real number: what building it from scratch
   costs, dependencies included, in compile-seconds.
-- 🧵 **Fast** — package descriptions load in parallel, reachability scans
-  fan out on the cooperative thread pool; a ~200-target workspace checks in
-  a few seconds.
 
 ## Quick Start
 

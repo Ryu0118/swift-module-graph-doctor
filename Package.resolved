@@ -1,5 +1,5 @@
 {
-  "originHash" : "76c5083428b251fe5a24f8dccbe0da005a1925e1d95e9fcd0a1fab9c2125fd8b",
+  "originHash" : "d3a7872e7af3b3583ab01529e0860035cb737c5bf42e6d0e8d5dfe9e1a8bc793",
   "pins" : [
     {
       "identity" : "filemanagerprotocol",
@@ -58,10 +58,10 @@
     {
       "identity" : "swift-module-graph",
       "kind" : "remoteSourceControl",
-      "location" : "git@github.com:Ryu0118/swift-module-graph.git",
+      "location" : "https://github.com/Ryu0118/swift-module-graph.git",
       "state" : {
-        "revision" : "991044834a8c58ca61dc22d018ed4d9ad2ca1661",
-        "version" : "0.5.1"
+        "revision" : "f7bbcf85c66879627bc7a279cce35016963a5494",
+        "version" : "0.1.0"
       }
     },
     {

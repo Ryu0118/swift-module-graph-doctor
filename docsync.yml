@@ -82,7 +82,7 @@ rules:
   doc: README.md
   message: Package.swift changed (dependency versions, products, or swift-tools-version).
     Update the README Installation section and version badges if they no longer match.
-  checksum: bdb84000f0b87a0c13efd6cf3a7060ff6dfd82e580535ca150fd4abf26d118f7
+  checksum: 0bc2eb5a795da2c761de4a430e0cb47336ec1fbb5d711f07848581adf5f4e48f
 excludes:
 - '**/.build/**'
 - '**/.swiftpm/**'
